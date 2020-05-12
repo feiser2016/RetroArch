@@ -61,7 +61,6 @@
 #include <retro_inline.h>
 #include <compat/strl.h>
 #include <compat/fopen_utf8.h>
-#include <rhash.h>
 #include <lists/file_list.h>
 #include <file/file_path.h>
 #include <streams/file_stream.h>
@@ -76,6 +75,7 @@
 #include "../../retroarch.h"
 #include "../../verbosity.h"
 #include "../../paths.h"
+#include "../../msg_hash.h"
 #include "platform_unix.h"
 
 #ifdef HAVE_MENU
@@ -117,6 +117,10 @@ static const char *proc_acpi_sysfs_ac_adapter_path = "/sys/class/power_supply/AC
 static const char *proc_acpi_sysfs_battery_path    = "/sys/class/power_supply";
 static const char *proc_acpi_ac_adapter_path       = "/proc/acpi/ac_adapter";
 static char unix_cpu_model_name[64] = {0};
+#endif
+
+#if (defined(__linux__) || defined(__unix__)) && !defined(ANDROID)
+static int speak_pid                            = 0;
 #endif
 
 static volatile sig_atomic_t unix_sighandler_quit;
@@ -377,6 +381,18 @@ static void onInputQueueDestroyed(ANativeActivity* activity,
    android_app_set_input((struct android_app*)activity->instance, NULL);
 }
 
+static void onContentRectChanged(ANativeActivity *activity,
+      const ARect *rect)
+{
+   struct android_app *instance = (struct android_app*)activity->instance;
+   unsigned width = rect->right - rect->left;
+   unsigned height = rect->bottom - rect->top;
+   RARCH_LOG("Content rect changed: %u x %u\n", width, height);
+   instance->content_rect.changed = true;
+   instance->content_rect.width   = width;
+   instance->content_rect.height  = height;
+}
+
 JNIEnv *jni_thread_getenv(void)
 {
    JNIEnv *env;
@@ -486,6 +502,7 @@ void ANativeActivity_onCreate(ANativeActivity* activity,
    activity->callbacks->onNativeWindowDestroyed = onNativeWindowDestroyed;
    activity->callbacks->onInputQueueCreated     = onInputQueueCreated;
    activity->callbacks->onInputQueueDestroyed   = onInputQueueDestroyed;
+   activity->callbacks->onContentRectChanged    = onContentRectChanged;
 
    /* These are set only for the native activity,
     * and are reset when it ends. */
@@ -652,7 +669,6 @@ static bool make_proc_acpi_key_val(char **_ptr, char **_key, char **_val)
 }
 
 #define ACPI_VAL_CHARGING_DISCHARGING  0xf268327aU
-#define ACPI_VAL_ONLINE                0x6842bf17U
 
 static void check_proc_acpi_battery(const char * node, bool * have_battery,
       bool * charging, int *seconds, int *percent)
@@ -699,19 +715,8 @@ static void check_proc_acpi_battery(const char * node, bool * have_battery,
       {
          if (string_is_equal(val, "charging"))
             charge = true;
-         else
-         {
-            uint32_t val_hash = djb2_calculate(val);
-
-            switch (val_hash)
-            {
-               case ACPI_VAL_CHARGING_DISCHARGING:
-                  charge = true;
-                  break;
-               default:
-                  break;
-            }
-         }
+         else if (string_is_equal(val, "charging/discharging"))
+            charge = true;
       }
       else if (string_is_equal(key, "remaining capacity"))
       {
@@ -854,10 +859,8 @@ static void check_proc_acpi_ac_adapter(const char * node, bool *have_ac)
    ptr = &buf[0];
    while (make_proc_acpi_key_val(&ptr, &key, &val))
    {
-      uint32_t val_hash = djb2_calculate(val);
-
       if (string_is_equal(key, "state") &&
-            val_hash == ACPI_VAL_ONLINE)
+            string_is_equal(val, "on-line"))
          *have_ac = true;
    }
 
@@ -1076,7 +1079,7 @@ static bool frontend_unix_powerstate_check_acpi_sysfs(
 #ifdef HAVE_LAKKA_SWITCH
       if (node && strstr(node, "max170xx_battery"))
 #else
-      if (node && strstr(node, "BAT"))
+      if (node && (strstr(node, "BAT") || strstr(node, "battery")))
 #endif
          check_proc_acpi_sysfs_battery(node,
                &have_battery, &charging, seconds, percent);
@@ -1910,7 +1913,7 @@ static int frontend_unix_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
 #ifdef ANDROID
    if (!string_is_empty(internal_storage_path))
@@ -1964,6 +1967,50 @@ static int frontend_unix_parse_drive_list(void *data, bool load_content)
             enum_idx,
             FILE_TYPE_DIRECTORY, 0, 0);
    }
+#else
+   char base_path[PATH_MAX] = {0};
+   const char *xdg          = getenv("XDG_CONFIG_HOME");
+   const char *home         = getenv("HOME");
+
+   if (xdg)
+   {
+      strlcpy(base_path, xdg, sizeof(base_path));
+      strlcat(base_path, "/retroarch", sizeof(base_path));
+   }
+   else if (home)
+   {
+      strlcpy(base_path, home, sizeof(base_path));
+      strlcat(base_path, "/.config/retroarch", sizeof(base_path));
+   }
+
+   if(!string_is_empty(base_path))
+   {
+      menu_entries_append_enum(list, base_path,
+            msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
+            enum_idx,
+            FILE_TYPE_DIRECTORY, 0, 0);
+   }
+   if (!string_is_empty(home))
+   {
+      menu_entries_append_enum(list, home,
+            msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
+            enum_idx,
+            FILE_TYPE_DIRECTORY, 0, 0);
+   }
+   if (path_is_directory("/media"))
+   {
+      menu_entries_append_enum(list, "/media",
+            msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
+            enum_idx,
+            FILE_TYPE_DIRECTORY, 0, 0);
+   }
+   if (path_is_directory("/mnt"))
+   {
+      menu_entries_append_enum(list, "/mnt",
+            msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
+            enum_idx,
+            FILE_TYPE_DIRECTORY, 0, 0);
+   }
 #endif
 
    menu_entries_append_enum(list, "/",
@@ -2009,7 +2056,7 @@ static bool frontend_unix_set_fork(enum frontend_fork fork_mode)
    return true;
 }
 
-static void frontend_unix_exec(const char *path, bool should_load_game)
+static void frontend_unix_exec(const char *path, bool should_load_content)
 {
    char *newargv[]    = { NULL, NULL };
    size_t len         = strlen(path);
@@ -2021,9 +2068,9 @@ static void frontend_unix_exec(const char *path, bool should_load_game)
    execv(path, newargv);
 }
 
-static void frontend_unix_exitspawn(char *core_path, size_t core_path_size)
+static void frontend_unix_exitspawn(char *s, size_t len, char *args)
 {
-   bool should_load_game = false;
+   bool should_load_content = false;
 
    if (unix_fork_mode == FRONTEND_FORK_NONE)
       return;
@@ -2031,27 +2078,27 @@ static void frontend_unix_exitspawn(char *core_path, size_t core_path_size)
    switch (unix_fork_mode)
    {
       case FRONTEND_FORK_CORE_WITH_ARGS:
-         should_load_game = true;
+         should_load_content = true;
          break;
       case FRONTEND_FORK_NONE:
       default:
          break;
    }
 
-   frontend_unix_exec(core_path, should_load_game);
+   frontend_unix_exec(s, should_load_content);
 }
 #endif
 
 static uint64_t frontend_unix_get_mem_total(void)
 {
-   long pages            = sysconf(_SC_PHYS_PAGES);
-   long page_size        = sysconf(_SC_PAGE_SIZE);
+   uint64_t pages            = sysconf(_SC_PHYS_PAGES);
+   uint64_t page_size        = sysconf(_SC_PAGE_SIZE);
    return pages * page_size;
 }
 
 static uint64_t frontend_unix_get_mem_free(void)
 {
-#ifdef ANDROID
+#if defined(ANDROID) || (!defined(__linux__) && !defined(__OpenBSD__))
    char line[256];
    uint64_t total    = 0;
    uint64_t freemem  = 0;
@@ -2374,6 +2421,74 @@ enum retro_language frontend_unix_get_user_language(void)
    return lang;
 }
 
+#if (defined(__linux__) || defined(__unix__)) && !defined(ANDROID)
+static bool is_narrator_running_unix(void)
+{
+   return (kill(speak_pid, 0) == 0);
+}
+
+static bool accessibility_speak_unix(int speed,
+      const char* speak_text, int priority)
+{
+   int pid;
+   const char *language   = get_user_language_iso639_1(true);
+   char* voice_out        = (char *)malloc(3+strlen(language));
+   char* speed_out        = (char *)malloc(3+3);
+   const char* speeds[10] = {"80", "100", "125", "150", "170", "210", "260", "310", "380", "450"};
+
+   if (speed < 1)
+      speed = 1;
+   else if (speed > 10)
+      speed = 10;
+
+   strlcpy(voice_out, "-v", 3);
+   strlcat(voice_out, language, 5);
+
+   strlcpy(speed_out, "-s", 3);
+   strlcat(speed_out, speeds[speed-1], 6);
+
+   if (priority < 10 && speak_pid > 0)
+   {
+      /* check if old pid is running */
+      if (is_narrator_running_unix())
+         return true;
+   }
+
+   if (speak_pid > 0)
+   {
+      /* Kill the running espeak */
+      kill(speak_pid, SIGTERM);
+      speak_pid = 0;
+   }
+
+   pid = fork();
+   if (pid < 0)
+   {
+      /* error */
+      RARCH_LOG("ERROR: could not fork for espeak.\n");
+   }
+   else if (pid > 0)
+   {
+      /* parent process */
+      speak_pid = pid;
+
+      /* Tell the system that we'll ignore the exit status of the child 
+       * process.  This prevents zombie processes. */
+      signal(SIGCHLD,SIG_IGN);
+   }
+   else
+   { 
+      /* child process: replace process with the espeak command */ 
+      char* cmd[] = { (char*) "espeak", NULL, NULL, NULL, NULL};
+      cmd[1] = voice_out;
+      cmd[2] = speed_out;
+      cmd[3] = (char *) speak_text;
+      execvp("espeak", cmd);
+   }
+   return true;
+}
+#endif
+
 frontend_ctx_driver_t frontend_ctx_unix = {
    frontend_unix_get_env,       /* environment_get */
    frontend_unix_init,          /* init */
@@ -2420,6 +2535,13 @@ frontend_ctx_driver_t frontend_ctx_unix = {
    frontend_unix_set_sustained_performance_mode,
    frontend_unix_get_cpu_model_name,
    frontend_unix_get_user_language,
+#if (defined(__linux__) || defined(__unix__)) && !defined(ANDROID)
+   is_narrator_running_unix,
+   accessibility_speak_unix,
+#else
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
+#endif
 #ifdef ANDROID
    "android"
 #else

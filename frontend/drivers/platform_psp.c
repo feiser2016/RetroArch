@@ -89,18 +89,6 @@ static void frontend_psp_get_environment_settings(int *argc, char *argv[],
 
    (void)args;
 
-#ifndef IS_SALAMANDER
-#if defined(HAVE_LOGGER)
-   logger_init();
-#elif defined(HAVE_FILE_LOGGER)
-#ifndef VITA
-   retro_main_log_file_init("ms0:/temp/retroarch-log.txt", false);
-#else
-   retro_main_log_file_init("ux0:/temp/retroarch-log.txt", false);
-#endif
-#endif
-#endif
-
 #ifdef VITA
    strlcpy(eboot_path, "app0:/", sizeof(eboot_path));
    strlcpy(g_defaults.dirs[DEFAULT_DIR_PORT], eboot_path, sizeof(g_defaults.dirs[DEFAULT_DIR_PORT]));
@@ -245,10 +233,7 @@ static void frontend_psp_deinit(void *data)
    (void)data;
 #ifndef IS_SALAMANDER
    verbosity_disable();
-#ifdef HAVE_FILE_LOGGER
-   command_event(CMD_EVENT_LOG_FILE_DEINIT, NULL);
-#endif
-
+   pthread_terminate();
 #endif
 }
 
@@ -389,9 +374,9 @@ static bool frontend_psp_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_psp_exitspawn(char *s, size_t len)
+static void frontend_psp_exitspawn(char *s, size_t len, char *args)
 {
-   bool should_load_game = false;
+   bool should_load_content = false;
 #ifndef IS_SALAMANDER
    if (psp_fork_mode == FRONTEND_FORK_NONE)
       return;
@@ -399,14 +384,14 @@ static void frontend_psp_exitspawn(char *s, size_t len)
    switch (psp_fork_mode)
    {
       case FRONTEND_FORK_CORE_WITH_ARGS:
-         should_load_game = true;
+         should_load_content = true;
          break;
       case FRONTEND_FORK_NONE:
       default:
          break;
    }
 #endif
-   frontend_psp_exec(s, should_load_game);
+   frontend_psp_exec(s, should_load_content);
 }
 
 static int frontend_psp_get_rating(void)
@@ -464,7 +449,7 @@ static int frontend_psp_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
 #ifdef VITA
    menu_entries_append_enum(list,
@@ -611,9 +596,13 @@ frontend_ctx_driver_t frontend_ctx_psp = {
    NULL,                         /* get_cpu_model_name */
 #ifdef VITA
    frontend_psp_get_user_language,
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "vita",
 #else
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "psp",
 #endif
 };

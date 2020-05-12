@@ -13,19 +13,26 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "uwp_main.h"
+#include <ppltasks.h>
+#include <collection.h>
+#include <windows.devices.enumeration.h>
+
+#include <encodings/utf.h>
+#include <string/stdstring.h>
+#include <lists/string_list.h>
 #include <queues/task_queue.h>
 #include <retro_timers.h>
+
+#include "configuration.h"
+#include "paths.h"
+
+#include "uwp_main.h"
 #include "../retroarch.h"
 #include "../frontend/frontend.h"
 #include "../input/input_keymaps.h"
 #include "../verbosity.h"
-#include "../libretro-common/include/encodings/utf.h"
-#include "../libretro-common/include/lists/string_list.h"
 #include "uwp_func.h"
-
-#include <ppltasks.h>
-#include <collection.h>
+#include "uwp_async.h"
 
 using namespace RetroArchUWP;
 
@@ -42,10 +49,12 @@ using namespace Windows::System::Profile;
 using namespace Windows::Foundation;
 using namespace Windows::Foundation::Collections;
 using namespace Windows::Graphics::Display;
+using namespace Windows::Devices::Enumeration;
 
 char uwp_dir_install[PATH_MAX_LENGTH];
 char uwp_dir_data[PATH_MAX_LENGTH];
 char uwp_device_family[128];
+char win32_cpu_model_name[128] = { 0 };
 
 // Some keys are unavailable in the VirtualKey enum (wtf) but the old-style constants work
 const struct rarch_key_map rarch_key_map_uwp[] = {
@@ -162,6 +171,14 @@ const struct rarch_key_map rarch_key_map_uwp[] = {
    { 0, RETROK_UNKNOWN }
 };
 
+#define MAX_TOUCH 16
+struct input_pointer {
+	int id;
+	bool isInContact;
+	short x, y;
+	short full_x, full_y;
+};
+
 struct uwp_input_state_t {
    short mouse_screen_x;
    short mouse_screen_y;
@@ -174,14 +191,19 @@ struct uwp_input_state_t {
    bool mouse_button5;
    short mouse_wheel_left;
    short mouse_wheel_up;
-   short touch_screen_x;
-   short touch_screen_y;
-   short touch_rel_x;
-   short touch_rel_y;
-   bool touch_touched;
+   unsigned touch_count;
+   struct input_pointer touch[MAX_TOUCH];
 };
 
 struct uwp_input_state_t uwp_current_input, uwp_next_input;
+
+
+// Taken from DirectX UWP samples - on Xbox, everything is scaled 200% so getting the DPI calculation correct is crucial
+static inline float ConvertDipsToPixels(float dips, float dpi)
+{
+	static const float dipsPerInch = 96.0f;
+	return floorf(dips * dpi / dipsPerInch + 0.5f);
+}
 
 // The main function is only used to initialize our IFrameworkView class.
 [Platform::MTAThread]
@@ -219,11 +241,11 @@ App::App() :
 	m_instance = this;
 }
 
-// The first method called when the IFrameworkView is being created.
+/* The first method called when the IFrameworkView is being created. */
 void App::Initialize(CoreApplicationView^ applicationView)
 {
-	// Register event handlers for app lifecycle. This example includes Activated, so that we
-	// can make the CoreWindow active and start rendering on the window.
+	/* Register event handlers for app lifecycle. This example includes Activated, so that we
+	 * can make the CoreWindow active and start rendering on the window. */
 	applicationView->Activated +=
 		ref new TypedEventHandler<CoreApplicationView^, IActivatedEventArgs^>(this, &App::OnActivated);
 
@@ -234,7 +256,7 @@ void App::Initialize(CoreApplicationView^ applicationView)
 		ref new EventHandler<Platform::Object^>(this, &App::OnResuming);
 }
 
-// Called when the CoreWindow object is created (or re-created).
+/* Called when the CoreWindow object is created (or re-created). */
 void App::SetWindow(CoreWindow^ window)
 {
 	window->SizeChanged +=
@@ -282,7 +304,7 @@ void App::SetWindow(CoreWindow^ window)
 		ref new EventHandler<Windows::UI::Core::BackRequestedEventArgs^>(this, &App::OnBackRequested);
 }
 
-// Initializes scene resources, or loads a previously saved app state.
+/* Initializes scene resources, or loads a previously saved app state. */
 void App::Load(Platform::String^ entryPoint)
 {
 	int ret = rarch_main(NULL, NULL, NULL);
@@ -300,28 +322,32 @@ void App::Load(Platform::String^ entryPoint)
 		ref new TypedEventHandler<PackageCatalog^, PackageInstallingEventArgs^>(this, &App::OnPackageInstalling);
 }
 
-// This method is called after the window becomes active.
+/* This method is called after the window becomes active. */
 void App::Run()
 {
+   bool x = false;
 	if (!m_initialized)
 	{
 		RARCH_WARN("Initialization failed, so not running\n");
 		return;
 	}
 
-	bool x = false;
-	while (true)
+
+   for (;;)
 	{
+      int ret;
 		CoreWindow::GetForCurrentThread()->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
 
-		int           ret = runloop_iterate();
+		ret = runloop_iterate();
 
 		task_queue_check();
 
 		if (!x)
 		{
-			/* HACK: I have no idea why is this necessary but it is required to get proper scaling on Xbox *
-			 * Perhaps PreferredLaunchViewSize is broken and we need to wait until the app starts to call TryResizeView */
+			/* HACK: I have no idea why is this necessary but 
+          * it is required to get proper scaling on Xbox *
+			 * Perhaps PreferredLaunchViewSize is broken and 
+          * we need to wait until the app starts to call TryResizeView */
 			m_windowResized = true;
 			x = true;
 		}
@@ -331,33 +357,64 @@ void App::Run()
 	}
 }
 
-// Required for IFrameworkView.
-// Terminate events do not cause Uninitialize to be called. It will be called if your IFrameworkView
-// class is torn down while the app is in the foreground.
+/* Required for IFrameworkView.
+ * Terminate events do not cause Uninitialize to be called. 
+ * It will be called if your IFrameworkView
+ * class is torn down while the app is in the foreground. */
 void App::Uninitialize()
 {
 	main_exit(NULL);
 }
 
-// Application lifecycle event handlers.
+/* Application lifecycle event handlers. */
 
 void App::OnActivated(CoreApplicationView^ applicationView, IActivatedEventArgs^ args)
 {
-	// Run() won't start until the CoreWindow is activated.
+	/* Run() won't start until the CoreWindow is activated. */
 	CoreWindow::GetForCurrentThread()->Activate();
 }
 
 void App::OnSuspending(Platform::Object^ sender, SuspendingEventArgs^ args)
 {
-	// Save app state asynchronously after requesting a deferral. Holding a deferral
-	// indicates that the application is busy performing suspending operations. Be
-	// aware that a deferral may not be held indefinitely. After about five seconds,
-	// the app will be forced to exit.
+	/* Save app state asynchronously after requesting a deferral. Holding a deferral
+	 * indicates that the application is busy performing suspending operations. Be
+	 * aware that a deferral may not be held indefinitely. After about five seconds,
+	 * the app will be forced to exit.
+    */
 	SuspendingDeferral^ deferral = args->SuspendingOperation->GetDeferral();
+	auto                     app = this;
 
-	create_task([this, deferral]()
+	create_task([app, deferral]()
 	{
-		// TODO: Maybe creating a save state here would be a good idea?
+		/* TODO: Maybe creating a save state here would be a good idea? */
+		settings_t* settings     = config_get_ptr();
+      bool config_save_on_exit = settings->bools.config_save_on_exit;
+
+		if (config_save_on_exit)
+      {
+			if (!path_is_empty(RARCH_PATH_CONFIG))
+			{
+				const char* config_path = path_get(RARCH_PATH_CONFIG);
+				bool path_exists        = !string_is_empty(config_path);
+
+            if (path_exists)
+            {
+               if (config_save_file(config_path))
+               {
+                  RARCH_LOG("[config] %s \"%s\".\n",
+                        msg_hash_to_str(MSG_SAVED_NEW_CONFIG_TO),
+                        config_path);
+               }
+               else
+               {
+                  RARCH_ERR("[config] %s \"%s\".\n",
+                     msg_hash_to_str(MSG_FAILED_SAVING_CONFIG_TO),
+                     config_path);
+               }
+            }
+
+			}
+		}
 
 		deferral->Complete();
 	});
@@ -365,9 +422,10 @@ void App::OnSuspending(Platform::Object^ sender, SuspendingEventArgs^ args)
 
 void App::OnResuming(Platform::Object^ sender, Platform::Object^ args)
 {
-	// Restore any data or state that was unloaded on suspend. By default, data
-	// and state are persisted when resuming from suspend. Note that this event
-	// does not occur if the app was previously terminated.
+	/* Restore any data or state that was unloaded on suspend. By default, data
+	 * and state are persisted when resuming from suspend. Note that this event
+	 * does not occur if the app was previously terminated.
+    */
 }
 
 void App::OnBackRequested(Platform::Object^ sender, Windows::UI::Core::BackRequestedEventArgs^ args)
@@ -376,7 +434,7 @@ void App::OnBackRequested(Platform::Object^ sender, Windows::UI::Core::BackReque
 	args->Handled = true;
 }
 
-// Window event handlers.
+/* Window event handlers. */
 
 void App::OnWindowSizeChanged(CoreWindow^ sender, WindowSizeChangedEventArgs^ args)
 {
@@ -417,6 +475,9 @@ void App::OnKey(CoreWindow^ sender, KeyEventArgs^ args)
 
 void App::OnPointer(CoreWindow^ sender, PointerEventArgs^ args)
 {
+
+	float dpi = DisplayInformation::GetForCurrentView()->LogicalDpi;
+	
 	if (args->CurrentPoint->PointerDevice->PointerDeviceType == PointerDeviceType::Mouse)
 	{
 		uwp_next_input.mouse_left = args->CurrentPoint->Properties->IsLeftButtonPressed;
@@ -424,8 +485,8 @@ void App::OnPointer(CoreWindow^ sender, PointerEventArgs^ args)
 		uwp_next_input.mouse_right = args->CurrentPoint->Properties->IsRightButtonPressed;
 		uwp_next_input.mouse_button4 = args->CurrentPoint->Properties->IsXButton1Pressed;
 		uwp_next_input.mouse_button5 = args->CurrentPoint->Properties->IsXButton2Pressed;
-		uwp_next_input.mouse_screen_x = args->CurrentPoint->Position.X;
-		uwp_next_input.mouse_screen_y = args->CurrentPoint->Position.Y;
+		uwp_next_input.mouse_screen_x = ConvertDipsToPixels(args->CurrentPoint->Position.X, dpi);
+		uwp_next_input.mouse_screen_y = ConvertDipsToPixels(args->CurrentPoint->Position.Y, dpi);
 		uwp_next_input.mouse_rel_x = uwp_next_input.mouse_screen_x - uwp_current_input.mouse_screen_x;
 		uwp_next_input.mouse_rel_y = uwp_next_input.mouse_screen_y - uwp_current_input.mouse_screen_y;
 		if (args->CurrentPoint->Properties->IsHorizontalMouseWheel)
@@ -435,11 +496,53 @@ void App::OnPointer(CoreWindow^ sender, PointerEventArgs^ args)
 	}
 	else
 	{
-		uwp_next_input.touch_touched = args->CurrentPoint->IsInContact;
-		uwp_next_input.touch_screen_x = args->CurrentPoint->Position.X;
-		uwp_next_input.touch_screen_y = args->CurrentPoint->Position.Y;
-		uwp_next_input.touch_rel_x = uwp_next_input.touch_screen_x - uwp_current_input.touch_screen_x;
-		uwp_next_input.touch_rel_y = uwp_next_input.touch_screen_y - uwp_current_input.touch_screen_y;
+		unsigned i, free_index = MAX_TOUCH; bool found = false;
+		int id = args->CurrentPoint->PointerId;
+
+		for (i = 0; i < uwp_next_input.touch_count; i++)
+		{
+			if (!uwp_next_input.touch[i].isInContact && free_index == MAX_TOUCH)
+				free_index = i;
+			if (uwp_next_input.touch[i].id == id)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			if (free_index >= 0 && free_index < uwp_next_input.touch_count)
+				i = free_index;
+			else if (uwp_next_input.touch_count + 1 < MAX_TOUCH)
+				i = ++uwp_next_input.touch_count;
+			else
+				return;
+		}
+
+		uwp_next_input.touch[i].id = id;
+
+		struct video_viewport vp;
+
+		/* convert from event coordinates to core and screen coordinates */
+		vp.x = 0;
+		vp.y = 0;
+		vp.width = 0;
+		vp.height = 0;
+		vp.full_width = 0;
+		vp.full_height = 0;
+
+		video_driver_translate_coord_viewport_wrap(
+			&vp,
+			ConvertDipsToPixels(args->CurrentPoint->Position.X, dpi),
+			ConvertDipsToPixels(args->CurrentPoint->Position.Y, dpi),
+			&uwp_next_input.touch[i].x,
+			&uwp_next_input.touch[i].y,
+			&uwp_next_input.touch[i].full_x,
+			&uwp_next_input.touch[i].full_y);
+
+		uwp_next_input.touch[i].isInContact = args->CurrentPoint->IsInContact;
+	
 	}
 }
 
@@ -448,7 +551,7 @@ void App::OnWindowClosed(CoreWindow^ sender, CoreWindowEventArgs^ args)
 	m_windowClosed = true;
 }
 
-// DisplayInformation event handlers.
+/* DisplayInformation event handlers. */
 
 void App::OnDpiChanged(DisplayInformation^ sender, Object^ args)
 {
@@ -462,7 +565,7 @@ void App::OnOrientationChanged(DisplayInformation^ sender, Object^ args)
 
 void App::OnDisplayContentsInvalidated(DisplayInformation^ sender, Object^ args)
 {
-	// Probably can be ignored?
+	/* Probably can be ignored? */
 }
 
 void App::OnPackageInstalling(PackageCatalog^ sender, PackageInstallingEventArgs^ args)
@@ -476,17 +579,10 @@ void App::OnPackageInstalling(PackageCatalog^ sender, PackageInstallingEventArgs
 	}
 }
 
-// Taken from DirectX UWP samples - on Xbox, everything is scaled 200% so getting the DPI calculation correct is crucial
-static inline float ConvertDipsToPixels(float dips, float dpi)
-{
-	static const float dipsPerInch = 96.0f;
-	return floorf(dips * dpi / dipsPerInch + 0.5f);
-}
-
-// Implement UWP equivalents of various win32_* functions
+/* Implement UWP equivalents of various win32_* functions */
 extern "C" {
 
-	bool win32_has_focus(void)
+	bool win32_has_focus(void *data)
 	{
 		return App::GetInstance()->IsWindowFocused();
 	}
@@ -521,9 +617,47 @@ extern "C" {
 		return true;
 	}
 
-	void win32_show_cursor(bool state)
+	void win32_show_cursor(void *data, bool state)
+   {
+      CoreWindow::GetForCurrentThread()->PointerCursor = state ? ref new CoreCursor(CoreCursorType::Arrow, 0) : nullptr;
+   }
+
+
+	bool win32_get_metrics(void* data,
+		enum display_metric_types type, float* value)
 	{
-		CoreWindow::GetForCurrentThread()->PointerCursor = state ? ref new CoreCursor(CoreCursorType::Arrow, 0) : nullptr;
+		int pixels_x = DisplayInformation::GetForCurrentView()->ScreenWidthInRawPixels;
+		int pixels_y = DisplayInformation::GetForCurrentView()->ScreenHeightInRawPixels;
+		int raw_dpi_x = DisplayInformation::GetForCurrentView()->RawDpiX;
+		int raw_dpi_y = DisplayInformation::GetForCurrentView()->RawDpiY;
+		int physical_width = pixels_x / raw_dpi_x;
+		int physical_height = pixels_y / raw_dpi_y;
+
+		switch (type)
+		{
+		case DISPLAY_METRIC_PIXEL_WIDTH:
+			*value = pixels_x;
+			return true;
+		case DISPLAY_METRIC_PIXEL_HEIGHT:
+			*value = pixels_y;
+			return true;
+		case DISPLAY_METRIC_MM_WIDTH:
+			/* 25.4 mm in an inch. */
+			*value = 254 * physical_width / 10;
+			return true;
+		case DISPLAY_METRIC_MM_HEIGHT:
+			/* 25.4 mm in an inch. */
+			*value = 254 * physical_height / 10;
+			return true;
+		case DISPLAY_METRIC_DPI:
+			*value = raw_dpi_x;
+			return true;
+		case DISPLAY_METRIC_NONE:
+		default:
+			*value = 0;
+			break;
+		}
+		return false;
 	}
 
 	void win32_check_window(bool *quit, bool *resize, unsigned *width, unsigned *height)
@@ -562,22 +696,23 @@ extern "C" {
 		uwp_next_input.mouse_rel_y       = 0;
 		uwp_next_input.mouse_wheel_up   %= WHEEL_DELTA;
 		uwp_next_input.mouse_wheel_left %= WHEEL_DELTA;
-		uwp_next_input.touch_rel_x       = 0;
-		uwp_next_input.touch_rel_y       = 0;
 	}
 
 	bool uwp_keyboard_pressed(unsigned key)
-	{
-		unsigned sym = rarch_keysym_lut[(enum retro_key)key];
-		CoreWindow^ window = CoreWindow::GetForCurrentThread();
-		if (!window)
-		{
-			// At times CoreWindow will return NULL while running Dolphin core
-			// Dolphin core runs on its own CPU thread separate from the UI-thread and so we must do a check for this.
-			return false;
-		}
-		return (window->GetKeyState((VirtualKey)sym) & CoreVirtualKeyStates::Down) == CoreVirtualKeyStates::Down;
-	}
+   {
+      VirtualKey sym = (VirtualKey)rarch_keysym_lut[(enum retro_key)key];
+
+      if (sym == VirtualKey::None)
+         return false;
+
+      CoreWindow^ window = CoreWindow::GetForCurrentThread();
+
+      /* At times CoreWindow will return NULL while running Dolphin core
+       * Dolphin core runs on its own CPU thread separate from the UI-thread and so we must do a check for this. */
+      if (!window)
+         return false;
+      return (window->GetKeyState(sym) & CoreVirtualKeyStates::Down) == CoreVirtualKeyStates::Down;
+   }
 
 	int16_t uwp_mouse_state(unsigned port, unsigned id, bool screen)
 	{
@@ -586,9 +721,13 @@ extern "C" {
 		switch (id)
 		{
 		case RETRO_DEVICE_ID_MOUSE_X:
-			return screen ? uwp_current_input.mouse_screen_x : uwp_current_input.mouse_rel_x;
+			return screen 
+            ? uwp_current_input.mouse_screen_x 
+            : uwp_current_input.mouse_rel_x;
 		case RETRO_DEVICE_ID_MOUSE_Y:
-			return screen ? uwp_current_input.mouse_screen_y : uwp_current_input.mouse_rel_y;
+			return screen 
+            ? uwp_current_input.mouse_screen_y 
+            : uwp_current_input.mouse_rel_y;
 		case RETRO_DEVICE_ID_MOUSE_LEFT:
 			return uwp_current_input.mouse_left;
 		case RETRO_DEVICE_ID_MOUSE_RIGHT:
@@ -612,20 +751,25 @@ extern "C" {
 		return 0;
 	}
 
-	// TODO: I don't have any touch-enabled Windows devices to test if this actually works
 	int16_t uwp_pointer_state(unsigned idx, unsigned id, bool screen)
 	{
 		switch (id)
-		{
-		case RETRO_DEVICE_ID_POINTER_X:
-			return screen ? uwp_current_input.touch_screen_x : uwp_current_input.touch_rel_x;
-		case RETRO_DEVICE_ID_POINTER_Y:
-			return screen ? uwp_current_input.touch_screen_y : uwp_current_input.touch_rel_y;
-		case RETRO_DEVICE_ID_POINTER_PRESSED:
-			return uwp_current_input.touch_touched;
-		default:
-			break;
-		}
+      {
+         case RETRO_DEVICE_ID_POINTER_X:
+            return screen 
+               ? uwp_current_input.touch[idx].full_x 
+               : uwp_current_input.touch[idx].x;
+         case RETRO_DEVICE_ID_POINTER_Y:
+            return screen 
+               ? uwp_current_input.touch[idx].full_y 
+               : uwp_current_input.touch[idx].y;
+         case RETRO_DEVICE_ID_POINTER_PRESSED:
+            return uwp_current_input.touch[idx].isInContact;
+         case RETRO_DEVICE_ID_POINTER_COUNT:
+            return uwp_current_input.touch_count;
+         default:
+            break;
+      }
 
 		return 0;
 	}
@@ -633,5 +777,72 @@ extern "C" {
 	void uwp_open_broadfilesystemaccess_settings(void)
 	{
 		Windows::System::Launcher::LaunchUriAsync(ref new Uri("ms-settings:privacy-broadfilesystemaccess"));
+	}
+
+	enum retro_language uwp_get_language(void)
+	{
+      string_list* split = NULL;
+		auto lang          = Windows::System::UserProfile::GlobalizationPreferences::Languages->GetAt(0);
+		char lang_bcp[16]  = { 0 };
+		char lang_iso[16]  = { 0 };
+
+		wcstombs(lang_bcp, lang->Data(), 16);
+
+		/* Trying to convert BCP 47 language codes to ISO 639 ones */
+		split = string_split(lang_bcp, "-");
+
+		strlcat(lang_iso, split->elems[0].data, sizeof(lang_iso));
+
+		if (split->size >= 2)
+		{
+			strlcat(lang_iso, "_", sizeof(lang_iso));
+			strlcat(lang_iso, split->elems[split->size >= 3 ? 2 : 1].data,
+               sizeof(lang_iso));
+		}
+		free(split);
+		return rarch_get_language_from_iso(lang_iso);
+	}
+
+	const char *uwp_get_cpu_model_name(void)
+	{
+		Platform::String^ cpu_id = nullptr;
+		Platform::String^ cpu_name = nullptr;
+		
+		/* GUID_DEVICE_PROCESSOR: {97FADB10-4E33-40AE-359C-8BEF029DBDD0} */
+		Platform::String^ if_filter = L"System.Devices.InterfaceClassGuid:=\"{97FADB10-4E33-40AE-359C-8BEF029DBDD0}\"";
+
+		/* Enumerate all CPU DeviceInterfaces, and get DeviceInstanceID of the first one. */
+		cpu_id = RunAsyncAndCatchErrors<Platform::String^>([&]() {
+			return create_task(DeviceInformation::FindAllAsync(if_filter)).then(
+				[&](DeviceInformationCollection^ collection)
+				{
+					return dynamic_cast<Platform::String^>(
+						collection->GetAt(0)->Properties->Lookup(L"System.Devices.DeviceInstanceID"));
+				});
+			}, nullptr);
+
+		if (cpu_id)
+		{
+			Platform::String^ dev_filter = L"System.Devices.DeviceInstanceID:=\"" + cpu_id + L"\"";
+
+			/* Get the Device with the same ID as the DeviceInterface
+			 * Then get the name (description) of that Device
+			 * We have to do this because the DeviceInterface we get doesn't have a proper description. */
+			cpu_name = RunAsyncAndCatchErrors<Platform::String^>([&]() {
+				return create_task(
+					DeviceInformation::FindAllAsync(dev_filter, {}, DeviceInformationKind::Device)).then(
+						[&](DeviceInformationCollection^ collection)
+						{
+							return cpu_name = collection->GetAt(0)->Name;
+						});
+				}, nullptr);
+		}
+		
+		
+		if (!cpu_name)
+         return "Unknown";
+
+      wcstombs(win32_cpu_model_name, cpu_name->Data(), 128);
+      return win32_cpu_model_name;
 	}
 }

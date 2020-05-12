@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2018 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (rthreads.c).
@@ -268,7 +268,9 @@ int sthread_detach(sthread_t *thread)
    free(thread);
    return 0;
 #else
-   return pthread_detach(thread->id);
+   int ret = pthread_detach(thread->id);
+   free(thread);
+   return ret;
 #endif
 }
 

@@ -30,11 +30,22 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+#ifdef VITA
+#include <vitaGL.h>
+#else
 #include <GL/gl.h>
 #include <GL/glext.h>
 #endif
+#endif
 
 #include "../../retroarch.h"
+
+#ifdef VITA
+#define GL_RGBA8     GL_RGBA
+#define GL_RGB8      GL_RGB
+#define GL_BGRA_EXT  GL_RGBA // Currently unsupported in vitaGL
+#define GL_CLAMP     GL_CLAMP_TO_EDGE
+#endif
 
 #define RARCH_GL1_INTERNAL_FORMAT32 GL_RGBA8
 #define RARCH_GL1_TEXTURE_TYPE32 GL_BGRA_EXT
@@ -44,46 +55,68 @@ struct string_list;
 
 typedef struct gl1
 {
-   unsigned video_width;
-   unsigned video_height;
-   unsigned screen_width;
-   unsigned screen_height;
-   int version_major;
-   int version_minor;
-   void *ctx_data;
-   const gfx_ctx_driver_t *ctx_driver;
-   GLuint tex;
-   GLuint menu_tex;
-   struct string_list *extensions;
+   bool fullscreen;
+   bool menu_rgb32;
+   bool menu_size_changed;
+   bool rgb32;
    bool supports_bgra;
-   struct video_viewport vp;
    bool keep_aspect;
-   unsigned vp_out_width;
-   unsigned vp_out_height;
    bool should_resize;
-   struct video_coords coords;
-   GLuint texture[GFX_MAX_TEXTURES];
-   unsigned tex_index; /* For use with PREV. */
-   unsigned textures;
-   math_matrix_4x4 mvp, mvp_no_rot;
-   struct video_tex_info tex_info;
-   const float *vertex_ptr;
-   const float *white_color_ptr;
-   unsigned rotation;
    bool menu_texture_enable;
    bool menu_texture_full_screen;
    bool have_sync;
    bool smooth;
    bool menu_smooth;
-   void *readback_buffer_screenshot;
    bool overlay_enable;
    bool overlay_full_screen;
-   GLuint *overlay_tex;
+   bool shared_context_use;
+
+   /* Only used for Vita */
+   bool vgl_inited;
+
+   int version_major;
+   int version_minor;
+
+
+   unsigned video_width;
+   unsigned video_height;
+   unsigned video_pitch;
+   unsigned screen_width;
+   unsigned screen_height;
+   unsigned menu_width;
+   unsigned menu_height;
+   unsigned menu_pitch;
+   unsigned video_bits;
+   unsigned menu_bits;
+   unsigned vp_out_width;
+   unsigned vp_out_height;
+   unsigned tex_index; /* For use with PREV. */
+   unsigned textures;
+   unsigned rotation;
    unsigned overlays;
+
+   GLuint tex;
+   GLuint menu_tex;
+
+   struct video_viewport vp;
+   struct video_coords coords;
+   math_matrix_4x4 mvp, mvp_no_rot;
+
+   void *ctx_data;
+   const gfx_ctx_driver_t *ctx_driver;
+   struct string_list *extensions;
+   struct video_tex_info tex_info;
+   void *readback_buffer_screenshot;
+   GLuint *overlay_tex;
    float *overlay_vertex_coord;
    float *overlay_tex_coord;
    float *overlay_color_coord;
-   bool fullscreen;
+   const float *vertex_ptr;
+   const float *white_color_ptr;
+   unsigned char *menu_frame;
+   unsigned char *video_buf;
+   unsigned char *menu_video_buf;
+   GLuint texture[GFX_MAX_TEXTURES];
 } gl1_t;
 
 static INLINE void gl1_bind_texture(GLuint id, GLint wrap_mode, GLint mag_filter,

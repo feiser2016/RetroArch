@@ -48,15 +48,23 @@ enum
    ACTION_OK_DL_DROPDOWN_BOX_LIST,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_SPECIAL,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_RESOLUTION,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_SHADER_PARAMETER,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_SHADER_PRESET_PARAMETER,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_VIDEO_SHADER_NUM_PASSES,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_PLAYLIST_DEFAULT_CORE,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_PLAYLIST_LABEL_DISPLAY_MODE,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_PLAYLIST_RIGHT_THUMBNAIL_MODE,
    ACTION_OK_DL_DROPDOWN_BOX_LIST_PLAYLIST_LEFT_THUMBNAIL_MODE,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_PLAYLIST_SORT_MODE,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_MANUAL_CONTENT_SCAN_SYSTEM_NAME,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_MANUAL_CONTENT_SCAN_CORE_NAME,
+   ACTION_OK_DL_DROPDOWN_BOX_LIST_DISK_INDEX,
    ACTION_OK_DL_OPEN_ARCHIVE,
    ACTION_OK_DL_OPEN_ARCHIVE_DETECT_CORE,
    ACTION_OK_DL_MUSIC,
    ACTION_OK_DL_NETPLAY,
    ACTION_OK_DL_SCAN_DIR_LIST,
+   ACTION_OK_DL_MANUAL_SCAN_DIR_LIST,
    ACTION_OK_DL_HELP,
    ACTION_OK_DL_RPL_ENTRY,
    ACTION_OK_DL_RDB_ENTRY,
@@ -77,10 +85,21 @@ enum
    ACTION_OK_DL_FILE_BROWSER_SELECT_FILE,
    ACTION_OK_DL_FILE_BROWSER_SELECT_DIR,
    ACTION_OK_DL_INPUT_SETTINGS_LIST,
+   ACTION_OK_DL_INPUT_HAPTIC_FEEDBACK_SETTINGS_LIST,
+   ACTION_OK_DL_REMAPPINGS_PORT_LIST,
+   ACTION_OK_DL_INPUT_MENU_SETTINGS_LIST,
    ACTION_OK_DL_DRIVER_SETTINGS_LIST,
    ACTION_OK_DL_VIDEO_SETTINGS_LIST,
+   ACTION_OK_DL_VIDEO_FULLSCREEN_MODE_SETTINGS_LIST,
+   ACTION_OK_DL_VIDEO_WINDOWED_MODE_SETTINGS_LIST,
+   ACTION_OK_DL_VIDEO_SYNCHRONIZATION_SETTINGS_LIST,
+   ACTION_OK_DL_VIDEO_OUTPUT_SETTINGS_LIST,
+   ACTION_OK_DL_VIDEO_SCALING_SETTINGS_LIST,
    ACTION_OK_DL_CRT_SWITCHRES_SETTINGS_LIST,
    ACTION_OK_DL_AUDIO_SETTINGS_LIST,
+   ACTION_OK_DL_AUDIO_OUTPUT_SETTINGS_LIST,
+   ACTION_OK_DL_AUDIO_RESAMPLER_SETTINGS_LIST,
+   ACTION_OK_DL_AUDIO_SYNCHRONIZATION_SETTINGS_LIST,
    ACTION_OK_DL_AUDIO_MIXER_SETTINGS_LIST,
    ACTION_OK_DL_LATENCY_SETTINGS_LIST,
    ACTION_OK_DL_CONFIGURATION_SETTINGS_LIST,
@@ -147,6 +166,7 @@ enum
    ACTION_OK_DL_QUICK_MENU_OVERRIDE_OPTIONS_LIST,
    ACTION_OK_DL_MENU_SETTINGS_LIST,
    ACTION_OK_DL_AI_SERVICE_SETTINGS_LIST,
+   ACTION_OK_DL_ACCESSIBILITY_SETTINGS_LIST,
    ACTION_OK_DL_USER_INTERFACE_SETTINGS_LIST,
    ACTION_OK_DL_POWER_MANAGEMENT_SETTINGS_LIST,
    ACTION_OK_DL_MENU_SOUNDS_LIST,
@@ -155,6 +175,8 @@ enum
    ACTION_OK_DL_UPDATER_SETTINGS_LIST,
    ACTION_OK_DL_WIFI_SETTINGS_LIST,
    ACTION_OK_DL_NETWORK_SETTINGS_LIST,
+   ACTION_OK_DL_SUBSYSTEM_SETTINGS_LIST,
+   ACTION_OK_DL_NETWORK_HOSTING_SETTINGS_LIST,
    ACTION_OK_DL_NETPLAY_LAN_SCAN_SETTINGS_LIST,
    ACTION_OK_DL_LAKKA_SERVICES_LIST,
    ACTION_OK_DL_USER_SETTINGS_LIST,
@@ -166,7 +188,9 @@ enum
    ACTION_OK_DL_BROWSE_URL_START,
    ACTION_OK_DL_CONTENT_SETTINGS,
    ACTION_OK_DL_CDROM_INFO_DETAIL_LIST,
-   ACTION_OK_DL_RGUI_MENU_THEME_PRESET
+   ACTION_OK_DL_RGUI_MENU_THEME_PRESET,
+   ACTION_OK_DL_MANUAL_CONTENT_SCAN_LIST,
+   ACTION_OK_DL_MANUAL_CONTENT_SCAN_DAT_FILE
 };
 
 /* Function callbacks */
@@ -179,6 +203,7 @@ int action_cancel_pop_default(const char *path,
 int action_refresh_default(file_list_t *list, file_list_t *menu_list);
 
 int shader_action_parameter_right(unsigned type, const char *label, bool wraparound);
+int shader_action_preset_parameter_right(unsigned type, const char *label, bool wraparound);
 
 int action_cancel_pop_with_new_pos(const char *path,
       const char *label, unsigned type, size_t idx, size_t new_idx);
@@ -215,13 +240,11 @@ int action_right_cheat(unsigned type, const char *label,
 
 int menu_cbs_init_bind_left(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx,
-      const char *menu_label,
-      uint32_t label_hash);
+      const char *menu_label);
 
 int menu_cbs_init_bind_right(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx,
-      const char *menu_label,
-      uint32_t label_hash);
+      const char *menu_label);
 
 int menu_cbs_init_bind_refresh(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx);
@@ -255,11 +278,10 @@ int menu_cbs_init_bind_cancel(menu_file_list_cbs_t *cbs,
 
 int menu_cbs_init_bind_ok(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx,
-      uint32_t label_hash, uint32_t menu_label_hash);
+      const char *menu_label);
 
 int menu_cbs_init_bind_deferred_push(menu_file_list_cbs_t *cbs,
-      const char *path, const char *label, unsigned type, size_t idx,
-      uint32_t label_hash);
+      const char *path, const char *label, unsigned type, size_t idx);
 
 int menu_cbs_init_bind_select(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx);
@@ -268,8 +290,7 @@ int menu_cbs_init_bind_scan(menu_file_list_cbs_t *cbs,
       const char *path, const char *label, unsigned type, size_t idx);
 
 int menu_cbs_init_bind_title(menu_file_list_cbs_t *cbs,
-      const char *path, const char *label, unsigned type, size_t idx,
-      uint32_t label_hash);
+      const char *path, const char *label, unsigned type, size_t idx);
 
 #ifdef HAVE_LIBRETRODB
 int action_scan_directory(const char *path,

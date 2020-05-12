@@ -81,24 +81,6 @@ typedef struct menu_file_list_cbs
    char action_title_cache   [512];
 
    enum msg_hash_enums enum_idx;
-   const char *action_iterate_ident;
-   const char *action_deferred_push_ident;
-   const char *action_select_ident;
-   const char *action_get_title_ident;
-   const char *action_ok_ident;
-   const char *action_cancel_ident;
-   const char *action_scan_ident;
-   const char *action_right_ident;
-   const char *action_start_ident;
-   const char *action_info_ident;
-   const char *action_content_list_switch_ident;
-   const char *action_left_ident;
-   const char *action_refresh_ident;
-   const char *action_up_ident;
-   const char *action_label_ident;
-   const char *action_sublabel_ident;
-   const char *action_down_ident;
-   const char *action_get_value_ident;
 
    bool checked;
 
@@ -107,7 +89,7 @@ typedef struct menu_file_list_cbs
    int (*action_iterate)(const char *label, unsigned action);
    int (*action_deferred_push)(menu_displaylist_info_t *info);
    int (*action_select)(const char *path, const char *label, unsigned type,
-         size_t idx);
+         size_t idx, size_t entry_idx);
    int (*action_get_title)(const char *path, const char *label,
          unsigned type, char *s, size_t len);
    int (*action_ok)(const char *path, const char *label, unsigned type,
@@ -116,7 +98,8 @@ typedef struct menu_file_list_cbs
          size_t idx);
    int (*action_scan)(const char *path, const char *label, unsigned type,
          size_t idx);
-   int (*action_start)(unsigned type,  const char *label);
+   int (*action_start)(const char *path, const char *label, unsigned type,
+         size_t idx, size_t entry_idx);
    int (*action_info)(unsigned type,  const char *label);
    int (*action_content_list_switch)(void *data, void *userdata, const char
          *path, const char *label, unsigned type);
@@ -276,8 +259,8 @@ void menu_entry_get(menu_entry_t *entry, size_t stack_idx,
 
 int menu_entry_select(uint32_t i);
 
-int menu_entry_action(menu_entry_t *entry,
-                      unsigned i, enum menu_action action);
+int menu_entry_action(
+      menu_entry_t *entry, size_t i, enum menu_action action);
 
 void menu_entry_init(menu_entry_t *entry);
 

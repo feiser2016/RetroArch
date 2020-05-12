@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2019 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (file_path.c).
@@ -32,8 +32,6 @@
 #include <file/file_path.h>
 #include <retro_assert.h>
 #include <string/stdstring.h>
-#define VFS_FRONTEND
-#include <vfs/vfs_implementation.h>
 
 /* TODO: There are probably some unnecessary things on this huge include list now but I'm too afraid to touch it */
 #ifdef __APPLE__
@@ -87,7 +85,7 @@
 #include <fileXio.h>
 #endif
 
-#if defined(__CELLOS_LV2__)
+#if defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
 #include <cell/cell_fs.h>
 #endif
 
@@ -113,133 +111,6 @@
 #endif
 
 #endif
-
-static retro_vfs_stat_t path_stat_cb   = retro_vfs_stat_impl;
-static retro_vfs_mkdir_t path_mkdir_cb = retro_vfs_mkdir_impl;
-
-void path_vfs_init(const struct retro_vfs_interface_info* vfs_info)
-{
-   const struct retro_vfs_interface* 
-      vfs_iface           = vfs_info->iface;
-
-   path_stat_cb           = retro_vfs_stat_impl;
-   path_mkdir_cb          = retro_vfs_mkdir_impl;
-
-   if (vfs_info->required_interface_version < PATH_REQUIRED_VFS_VERSION || !vfs_iface)
-      return;
-
-   path_stat_cb           = vfs_iface->stat;
-   path_mkdir_cb          = vfs_iface->mkdir;
-}
-
-int path_stat(const char *path)
-{
-   return path_stat_cb(path, NULL);
-}
-
-/**
- * path_is_directory:
- * @path               : path
- *
- * Checks if path is a directory.
- *
- * Returns: true (1) if path is a directory, otherwise false (0).
- */
-bool path_is_directory(const char *path)
-{
-   return (path_stat_cb(path, NULL) & RETRO_VFS_STAT_IS_DIRECTORY) != 0;
-}
-
-bool path_is_character_special(const char *path)
-{
-   return (path_stat_cb(path, NULL) & RETRO_VFS_STAT_IS_CHARACTER_SPECIAL) != 0;
-}
-
-bool path_is_valid(const char *path)
-{
-   return (path_stat_cb(path, NULL) & RETRO_VFS_STAT_IS_VALID) != 0;
-}
-
-int32_t path_get_size(const char *path)
-{
-   int32_t filesize = 0;
-   if (path_stat_cb(path, &filesize) != 0)
-      return filesize;
-
-   return -1;
-}
-
-/**
- * path_mkdir:
- * @dir                : directory
- *
- * Create directory on filesystem.
- *
- * Returns: true (1) if directory could be created, otherwise false (0).
- **/
-bool path_mkdir(const char *dir)
-{
-   bool         sret  = false;
-   bool norecurse     = false;
-   char     *basedir  = NULL;
-
-   if (!(dir && *dir))
-      return false;
-
-   /* Use heap. Real chance of stack 
-    * overflow if we recurse too hard. */
-   basedir            = strdup(dir);
-
-   if (!basedir)
-	   return false;
-
-   path_parent_dir(basedir);
-
-   if (!*basedir || !strcmp(basedir, dir))
-   {
-      free(basedir);
-      return false;
-   }
-
-#if defined(GEKKO)
-   {
-      size_t len = strlen(basedir);
-
-      /* path_parent_dir() keeps the trailing slash.
-       * On Wii, mkdir() fails if the path has a
-       * trailing slash...
-       * We must therefore remove it. */
-      if (len > 0)
-         if (basedir[len - 1] == '/')
-            basedir[len - 1] = '\0';
-   }
-#endif
-
-   if (path_is_directory(basedir))
-      norecurse = true;
-   else
-   {
-      sret      = path_mkdir(basedir);
-
-      if (sret)
-         norecurse = true;
-   }
-
-   free(basedir);
-
-   if (norecurse)
-   {
-      int ret = path_mkdir_cb(dir);
-
-      /* Don't treat this as an error. */
-      if (ret == -2 && path_is_directory(dir))
-         return true;
-
-      return (ret == 0);
-   }
-
-   return sret;
-}
 
 /**
  * path_get_archive_delim:
@@ -740,7 +611,7 @@ bool path_is_absolute(const char *path)
          || strstr(path, ":\\")
          || strstr(path, ":\\\\"))
       return true;
-#elif defined(__wiiu__)
+#elif defined(__wiiu__) || defined(VITA)
    if (strstr(path, ":/"))
       return true;
 #endif
@@ -893,7 +764,7 @@ end:
 size_t path_relative_to(char *out,
       const char *path, const char *base, size_t size)
 {
-   size_t i;
+   size_t i, j;
    const char *trimmed_path, *trimmed_base;
 
 #ifdef _WIN32
@@ -905,9 +776,11 @@ size_t path_relative_to(char *out,
 #endif
 
    /* Trim common beginning */
-   for (i = 0; path[i] && base[i] && path[i] == base[i]; )
-      i++;
-   trimmed_path = path+i;
+   for (i = 0, j = 0; path[i] && base[i] && path[i] == base[i]; i++)
+      if (path[i] == path_default_slash_c())
+         j = i + 1;
+
+   trimmed_path = path+j;
    trimmed_base = base+i;
 
    /* Each segment of base turns into ".." */
@@ -1378,8 +1251,8 @@ void fill_pathname_home_dir(char *s, size_t len)
 
 bool is_path_accessible_using_standard_io(const char *path)
 {
+   bool result                = true;
 #ifdef __WINRT__
-   bool result;
    size_t         path_sizeof = PATH_MAX_LENGTH * sizeof(char);
    char *relative_path_abbrev = (char*)malloc(path_sizeof);
    fill_pathname_abbreviate_special(relative_path_abbrev, path, path_sizeof);
@@ -1387,8 +1260,6 @@ bool is_path_accessible_using_standard_io(const char *path)
    result = strlen(relative_path_abbrev) >= 2 && (relative_path_abbrev[0] == ':' || relative_path_abbrev[0] == '~') && path_char_is_slash(relative_path_abbrev[1]);
 
    free(relative_path_abbrev);
-   return result;
-#else
-   return true;
 #endif
+   return result;
 }

@@ -54,10 +54,10 @@ typedef struct gfx_ctx_gdi_data
    void *empty;
 } gfx_ctx_gdi_data_t;
 
-void *dinput_gdi;
+static void *dinput_gdi;
 
 static void gfx_ctx_gdi_check_window(void *data, bool *quit,
-      bool *resize, unsigned *width, unsigned *height, bool is_shutdown)
+      bool *resize, unsigned *width, unsigned *height)
 {
    win32_check_window(quit, resize, width, height);
 }
@@ -68,9 +68,8 @@ static bool gfx_ctx_gdi_set_resize(void *data,
    return false;
 }
 
-static void gfx_ctx_gdi_update_title(void *data, void *data2)
+static void gfx_ctx_gdi_update_title(void *data)
 {
-   video_frame_info_t* video_info = (video_frame_info_t*)data2;
    const ui_window_t *window      = ui_companion_driver_get_window_ptr();
    char title[128];
 
@@ -108,8 +107,7 @@ static void gfx_ctx_gdi_get_video_size(void *data,
    }
 }
 
-static void *gfx_ctx_gdi_init(
-      video_frame_info_t *video_info, void *video_driver)
+static void *gfx_ctx_gdi_init(void *video_driver)
 {
    WNDCLASSEX wndclass     = {0};
    gfx_ctx_gdi_data_t *gdi = (gfx_ctx_gdi_data_t*)calloc(1, sizeof(*gdi));
@@ -167,7 +165,6 @@ static void gfx_ctx_gdi_destroy(void *data)
 }
 
 static bool gfx_ctx_gdi_set_video_mode(void *data,
-      video_frame_info_t *video_info,
       unsigned width, unsigned height,
       bool fullscreen)
 {
@@ -211,11 +208,6 @@ static void gfx_ctx_gdi_input_driver(void *data,
    *input_data = dinput_gdi;
 }
 
-static bool gfx_ctx_gdi_has_focus(void *data)
-{
-   return win32_has_focus();
-}
-
 static enum gfx_ctx_api gfx_ctx_gdi_get_api(void *data)
 {
    return win32_gdi_api;
@@ -231,12 +223,6 @@ static bool gfx_ctx_gdi_bind_api(void *data,
    win32_gdi_api   = api;
 
    return true;
-}
-
-static void gfx_ctx_gdi_show_mouse(void *data, bool state)
-{
-   (void)data;
-   win32_show_cursor(state);
 }
 
 static void gfx_ctx_gdi_swap_interval(void *data, int interval)
@@ -258,10 +244,8 @@ static uint32_t gfx_ctx_gdi_get_flags(void *data)
    return flags;
 }
 
-static void gfx_ctx_gdi_swap_buffers(void *data, void *data2)
+static void gfx_ctx_gdi_swap_buffers(void *data)
 {
-   (void)data;
-
    SwapBuffers(win32_gdi_hdc);
 }
 
@@ -291,7 +275,7 @@ const gfx_ctx_driver_t gfx_ctx_gdi = {
    gfx_ctx_gdi_update_title,
    gfx_ctx_gdi_check_window,
    gfx_ctx_gdi_set_resize,
-   gfx_ctx_gdi_has_focus,
+   win32_has_focus,
    win32_suppress_screensaver,
    true, /* has_windowed */
    gfx_ctx_gdi_swap_buffers,
@@ -299,7 +283,7 @@ const gfx_ctx_driver_t gfx_ctx_gdi = {
    NULL,
    NULL,
    NULL,
-   gfx_ctx_gdi_show_mouse,
+   win32_show_cursor,
    "gdi",
    gfx_ctx_gdi_get_flags,
    gfx_ctx_gdi_set_flags,

@@ -92,8 +92,7 @@ static void gfx_ctx_mali_fbdev_get_video_size(void *data,
    *height = mali->height;
 }
 
-static void *gfx_ctx_mali_fbdev_init(video_frame_info_t *video_info,
-      void *video_driver)
+static void *gfx_ctx_mali_fbdev_init(void *video_driver)
 {
 #ifdef HAVE_EGL
    EGLint n;
@@ -122,22 +121,19 @@ static void *gfx_ctx_mali_fbdev_init(video_frame_info_t *video_info,
 #ifdef HAVE_EGL
    if (!egl_init_context(&mali->egl, EGL_NONE, EGL_DEFAULT_DISPLAY,
             &major, &minor, &n, attribs, NULL))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    return mali;
 
 error:
-   RARCH_ERR("[Mali fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_mali_fbdev_destroy(video_driver);
    return NULL;
 }
 
 static void gfx_ctx_mali_fbdev_check_window(void *data, bool *quit,
-      bool *resize, unsigned *width, unsigned *height, bool is_shutdown)
+      bool *resize, unsigned *width, unsigned *height)
 {
    unsigned new_width, new_height;
 
@@ -154,7 +150,6 @@ static void gfx_ctx_mali_fbdev_check_window(void *data, bool *quit,
 }
 
 static bool gfx_ctx_mali_fbdev_set_video_mode(void *data,
-      video_frame_info_t *video_info,
       unsigned width, unsigned height,
       bool fullscreen)
 {
@@ -190,10 +185,7 @@ static bool gfx_ctx_mali_fbdev_set_video_mode(void *data,
 
 #ifdef HAVE_EGL
    if (!egl_create_context(&mali->egl, attribs))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
 #ifdef HAVE_EGL
@@ -206,7 +198,7 @@ static bool gfx_ctx_mali_fbdev_set_video_mode(void *data,
 error:
    if (fd >= 0)
       close(fd);
-   RARCH_ERR("[Mali fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_mali_fbdev_destroy(data);
    return false;
 }
@@ -259,7 +251,7 @@ static void gfx_ctx_mali_fbdev_set_swap_interval(void *data,
 #endif
 }
 
-static void gfx_ctx_mali_fbdev_swap_buffers(void *data, void *data2)
+static void gfx_ctx_mali_fbdev_swap_buffers(void *data)
 {
    mali_ctx_data_t *mali = (mali_ctx_data_t*)data;
 

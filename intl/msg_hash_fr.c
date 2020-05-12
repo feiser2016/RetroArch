@@ -1,4 +1,4 @@
-﻿/*  RetroArch - A frontend for libretro.
+/*  RetroArch - A frontend for libretro.
  *  Copyright (C) 2011-2017 - Daniel De Matteis
  *  Copyright (C) 2014-2017 - Jean-André Santoni
  *  Copyright (C) 2016-2019 - Brad Parker
@@ -317,7 +317,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             snprintf(s, len, "Crée une capture d'écran. \n"
                     " \n"
                     "La capture d'écran sera sauvegardée \n"
-                    "dans le dossier des captures d'écran.");
+                    "dans le dossier assigné aux captures d'écran.");
             break;
         case MENU_ENUM_LABEL_ADD_TO_FAVORITES:
             snprintf(s, len, "Ajoute l'entrée à vos favoris.");
@@ -357,7 +357,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             snprintf(s, len,
                      "Dossier de base de données de contenu. \n"
                              " \n"
-                             "emplacement du dossier de la base de données \n"
+                             "Emplacement du dossier de la base de données \n"
                              "de contenu.");
             break;
         case MENU_ENUM_LABEL_THUMBNAILS_DIRECTORY:
@@ -596,7 +596,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_FPS_SHOW:
             snprintf(s, len,
-                     "Permet d'afficher les images par seconde \n"
+                     "Permet d'afficher le nombre d'images par seconde \n"
                              "actuelles.");
             break;
         case MENU_ENUM_LABEL_MEMORY_SHOW:
@@ -630,7 +630,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_INPUT_OVERLAY_SHOW_PHYSICAL_INPUTS_PORT:
             snprintf(s, len,
-                      "Selectionne le port d'écoute des touches pressées affichées \n"
+                      "Sélectionne le port d'écoute des touches pressées \n"
                             "affichées sur la surimpression à l'écran.");
             break;
         case MENU_ENUM_LABEL_OVERLAY_PRESET:
@@ -640,6 +640,18 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
         case MENU_ENUM_LABEL_OVERLAY_OPACITY:
             snprintf(s, len,
                      "Opacité de la surimpression.");
+        case MENU_ENUM_LABEL_VIDEO_LAYOUT_ENABLE:
+            snprintf(s, len,
+                      "Active ou désactive la disposition d'affichage actuelle.");
+            break;
+        case MENU_ENUM_LABEL_VIDEO_LAYOUT_PATH:
+            snprintf(s, len,
+                      "Emplacement de la disposition d'affichage.");
+            break;
+        case MENU_ENUM_LABEL_VIDEO_LAYOUT_SELECTED_VIEW:
+            snprintf(s, len,
+                      "Les dispositions d'affichage peuvent contenir plusieurs vues. \n"
+                      "Sélectionne une vue.");
             break;
         case MENU_ENUM_LABEL_INPUT_BIND_TIMEOUT:
             snprintf(s, len,
@@ -740,7 +752,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                              "au lieu de devoir passer par le navigateur de fichiers\n"
                              "à chaque fois.\n"
                              "\n"
-                             "REMERQUE : le contenu de certains cœurs peut toujours\n"
+                             "REMARQUE : le contenu de certains cœurs peut toujours\n"
                              "ne pas être analysable.",
                      msg_hash_to_str(MENU_ENUM_LABEL_VALUE_ADD_CONTENT_LIST),
                      msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SCAN_DIRECTORY),
@@ -820,7 +832,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             snprintf(s, len,
                      "Charger du contenu depuis l'historique. \n"
                              " \n"
-                             "Lorsque le contenu est chargé,les combinaisons de contenu \n"
+                             "Lorsque le contenu est chargé, les combinaisons de contenu \n"
                              "et de cœur libretro sont enregistrées dans l'historique. \n"
                              " \n"
                              "L'historique est enregistré dans un fichier dans le même \n"
@@ -831,83 +843,86 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             );
             break;
         case MENU_ENUM_LABEL_VIDEO_DRIVER:
-            snprintf(s, len,
+            {
+               const char *video_driver = settings->arrays.video_driver;
+               snprintf(s, len,
                      "Pilote vidéo actuel.");
 
-            if (string_is_equal(settings->arrays.video_driver, "gl"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo OpenGL. \n"
-                                 " \n"
-                                 "Ce pilote permet d’utiliser les cœurs  \n"
-                                 "libretro GL en plus des implémentations \n"
-                                 "en mode logiciel.\n"
-                                 " \n"
-                                 "Les performances pour les implémentations \n"
-                                 "logicielles et les cœurs libretro GL \n"
-                                 "dépendent du pilote GL sous-jacent de votre \n"
-                                 "carte graphique.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "sdl2"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo SDL 2.\n"
-                                 " \n"
-                                 "Ce pilote vidéo SDL 2 utilise le rendu en mode \n"
-                                 "logiciel.\n"
-                                 " \n"
-                                 "Les performances pour les implémentations \n"
-                                 "de cœurs libretro en mode logiciel dépendent \n"
-                                 "de l’implémentation SDL pour votre plateforme.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "sdl1"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo SDL.\n"
-                                 " \n"
-                                 "Ce pilote vidéo SDL 1.2 utilise le rendu en mode \n"
-                                 "logiciel.\n"
-                                 " \n"
-                                 "Ses performances sont considérées comme sous-optimales. \n"
-                                 "Pensez à ne l'utiliser qu'en dernier recours.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "d3d"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo Direct3D. \n"
-                                 " \n"
-                                 "Les performances des cœurs en mode logiciel \n"
-                                 "dépendent du pilote D3D sous-jacent de votre \n"
-                                 "carte graphique.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "exynos"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo Exynos-G2D. \n"
-                                 " \n"
-                                 "Pilote vidéo Exynos de bas niveau. Utilise \n"
-                                 "le bloc G2D dans le SoC Samsung Exynos \n"
-                                 "pour les opérations blit. \n"
-                                 " \n"
-                                 "Les performances pour les cœurs en mode \n"
-                                 "logiciel devraient être optimales.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "drm"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo DRM simple. \n"
-                                 " \n"
-                                 "Pilote vidéo de bas niveau utilisant libdrm pour \n"
-                                 "la mise à l'échelle matérielle en utilisant des \n"
-                                 "surimpressions accélérées par le processeur graphique.");
-            }
-            else if (string_is_equal(settings->arrays.video_driver, "sunxi"))
-            {
-                snprintf(s, len,
-                         "Pilote vidéo Sunxi-G2D. \n"
-                                 " \n"
-                                 "Pilote vidéo Sunxi de bas niveau. \n"
-                                 "Utilise le bloc G2D dans les SoC Allwinner.");
+               if (string_is_equal(video_driver, "gl"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo OpenGL. \n"
+                        " \n"
+                        "Ce pilote permet d’utiliser les cœurs  \n"
+                        "libretro GL en plus des implémentations \n"
+                        "en mode logiciel.\n"
+                        " \n"
+                        "Les performances pour les implémentations \n"
+                        "logicielles et les cœurs libretro GL \n"
+                        "dépendent du pilote GL sous-jacent de votre \n"
+                        "carte graphique.");
+               }
+               else if (string_is_equal(video_driver, "sdl2"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo SDL 2.\n"
+                        " \n"
+                        "Ce pilote vidéo SDL 2 utilise le rendu en mode \n"
+                        "logiciel.\n"
+                        " \n"
+                        "Les performances pour les implémentations \n"
+                        "de cœurs libretro en mode logiciel dépendent \n"
+                        "de l’implémentation SDL pour votre plateforme.");
+               }
+               else if (string_is_equal(video_driver, "sdl1"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo SDL.\n"
+                        " \n"
+                        "Ce pilote vidéo SDL 1.2 utilise le rendu en mode \n"
+                        "logiciel.\n"
+                        " \n"
+                        "Ses performances sont considérées comme sous-optimales. \n"
+                        "Pensez à ne l'utiliser qu'en dernier recours.");
+               }
+               else if (string_is_equal(video_driver, "d3d"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo Direct3D. \n"
+                        " \n"
+                        "Les performances des cœurs en mode logiciel \n"
+                        "dépendent du pilote D3D sous-jacent de votre \n"
+                        "carte graphique.");
+               }
+               else if (string_is_equal(video_driver, "exynos"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo Exynos-G2D. \n"
+                        " \n"
+                        "Pilote vidéo Exynos de bas niveau. Utilise \n"
+                        "le bloc G2D dans le SoC Samsung Exynos \n"
+                        "pour les opérations blit. \n"
+                        " \n"
+                        "Les performances pour les cœurs en mode \n"
+                        "logiciel devraient être optimales.");
+               }
+               else if (string_is_equal(video_driver, "drm"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo DRM simple. \n"
+                        " \n"
+                        "Pilote vidéo de bas niveau utilisant libdrm pour \n"
+                        "la mise à l'échelle matérielle en utilisant des \n"
+                        "surimpressions accélérées par le processeur graphique.");
+               }
+               else if (string_is_equal(video_driver, "sunxi"))
+               {
+                  snprintf(s, len,
+                        "Pilote vidéo Sunxi-G2D. \n"
+                        " \n"
+                        "Pilote vidéo Sunxi de bas niveau. \n"
+                        "Utilise le bloc G2D dans les SoC Allwinner.");
+               }
             }
             break;
         case MENU_ENUM_LABEL_AUDIO_DSP_PLUGIN:
@@ -955,7 +970,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_VIDEO_SHADER_SCALE_PASS:
             snprintf(s, len,
-                     "Echelle pour ce passage. \n"
+                     "Échelle pour ce passage. \n"
                              " \n"
                              "Le facteur d’échelle s’accumule, c’est-à-dire \n"
                              "2x pour le premier passage et 2x pour le second \n"
@@ -1203,7 +1218,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                              " \n"
                              "Si cette touche de raccourci est liée à un clavier, \n"
                              "à une touche ou à un axe de manette, toutes les autres \n"
-                             "touches de raccourci sont désactivées, à moins que \n"
+                             "touches de raccourci seront désactivées, à moins que \n"
                              "ce raccourci ne soit également maintenu enfoncé. \n"
                              " \n"
                              "Cette option est utile pour les implémentations \n"
@@ -1391,9 +1406,9 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_SYSTEM_DIRECTORY:
             snprintf(s, len,
-                     "Dossier système. \n"
+                     "Dossier 'Système'. \n"
                              " \n"
-                             "Définit le dossier 'système'.\n"
+                             "Définit le dossier 'Système'.\n"
                              "Les cœurs peuvent rechercher dans\n"
                              "ce dossier les BIOS, configurations \n"
                              "spécifiques au système, etc.");
@@ -1412,13 +1427,13 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             snprintf(s, len,
                      "Utilise le pilote vidéo sur plusieurs fils d'exécution.\n"
                              " \n"
-                             "Cette option peut améliorer la performance au détriment \n"
-                             "d'une latence et de saccades visuelles possiblement \n"
-                             "accrues.");
+                             "Cette option peut améliorer la performance \n"
+                             "au détriment possible d'une latence \n"
+                             "et de saccades visuelles accrues.");
             break;
         case MENU_ENUM_LABEL_VIDEO_VSYNC:
             snprintf(s, len,
-                     "Synchronisation vertivale vidéo (V-Sync).\n");
+                     "Synchronisation verticale vidéo (V-Sync).\n");
             break;
         case MENU_ENUM_LABEL_VIDEO_HARD_SYNC:
             snprintf(s, len,
@@ -1463,10 +1478,18 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                              "avant l'exécution du cœur.\n"
                              "\n"
                              "Peut réduire la latence au prix\n"
-                             "d'un risque accru de saccades.\n"
+                             "d'un plus grand risque de saccades.\n"
                              " \n"
                              "La valeur maximum est 15.");
             break;
+            case MENU_ENUM_LABEL_VIDEO_SHADER_DELAY:
+                snprintf(s, len,
+                         "Définit le délai en millisecondes après lequel\n"
+                                 "les shaders sont chargés.\n"
+                                 "\n"
+                                 "Peut résoudre des problèmes graphiques\n"
+                                 "lors de l'utilisation de logiciels de 'capture d'écran'.");
+                break;
         case MENU_ENUM_LABEL_VIDEO_HARD_SYNC_FRAMES:
             snprintf(s, len,
                      "Nombre d'images que le processeur peut éxécuter en avance \n"
@@ -1596,6 +1619,20 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                              " \n"
                              "Les nombres sont décrits en images."
             );
+            break;
+        case MENU_ENUM_LABEL_INPUT_TURBO_MODE:
+            snprintf(s, len,
+                  "Mode turbo.\n"
+                  " \n"
+                  "Sélectionne le comportement général du mode turbo."
+                  );
+            break;
+        case MENU_ENUM_LABEL_INPUT_TURBO_DEFAULT_BUTTON:
+            snprintf(s, len,
+                  "Touche turbo par défaut.\n"
+                  " \n"
+                  "Touche active par défaut pour le mode turbo 'Touche unique'.\n"
+                  );
             break;
         case MENU_ENUM_LABEL_INPUT_DUTY_CYCLE:
             snprintf(s, len,
@@ -1768,6 +1805,15 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                      "Lisse l'image avec le filtrage bilinéaire. \n"
                              "Devrait être désactivé si vous utilisez des shaders.");
             break;
+      case MENU_ENUM_LABEL_VIDEO_CTX_SCALING:
+         snprintf(s, len,
+#ifdef HAVE_ODROIDGO2
+               "Mise à l'échelle RGA et filtrage bicubique. Peut affecter les widgets."
+#else
+               "Mise à l'échelle selon le contexte matériel (si disponible)."
+#endif
+         );
+         break;
         case MENU_ENUM_LABEL_TIMEDATE_ENABLE:
             snprintf(s, len,
                      "Affiche la date et/ou l'heure locale dans le menu.");
@@ -1794,7 +1840,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_NETPLAY_DISCONNECT:
             snprintf(s, len,
-                     "Déconnect une connexion de jeu en réseau active.");
+                     "Déconnecte une connexion de jeu en réseau active.");
             break;
         case MENU_ENUM_LABEL_NETPLAY_LAN_SCAN_SETTINGS:
             snprintf(s, len,
@@ -1827,9 +1873,16 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
             break;
         case MENU_ENUM_LABEL_OVERLAY_DIRECTORY:
             snprintf(s, len,
-                     "Dossier des surimpressions. \n"
+                     "Dossier des Surimpressions. \n"
                              " \n"
                              "Définit un dossier dans lequel les surimpressions \n"
+                             "seront conservées pour un accès facile.");
+            break;
+        case MENU_ENUM_LABEL_VIDEO_LAYOUT_DIRECTORY:
+            snprintf(s, len,
+                     "Dossier des Dispositions d'affichage. \n"
+                             " \n"
+                             "Définit un dossier dans lequel les dispositions d'affichage \n"
                              "seront conservées pour un accès facile.");
             break;
         case MENU_ENUM_LABEL_INPUT_MAX_USERS:
@@ -1856,11 +1909,11 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
         case MENU_ENUM_LABEL_NETPLAY_TCP_UDP_PORT:
             snprintf(s, len,
                      "Port de l'adresse IP de l'hôte. \n"
-                             "Can be either a TCP or UDP port.");
+                             "Peut être soit un port TCP soit UDP.");
             break;
         case MENU_ENUM_LABEL_NETPLAY_SPECTATOR_MODE_ENABLE:
             snprintf(s, len,
-                     "Active ou désactive le modespectateur pour \n"
+                     "Active ou désactive le mode spectateur pour \n"
                              "l'utilisateur durant le jeu en réseau.");
             break;
         case MENU_ENUM_LABEL_NETPLAY_IP_ADDRESS:
@@ -1928,7 +1981,7 @@ int menu_hash_get_help_fr_enum(enum msg_hash_enums msg, char *s, size_t len)
                              " \n"
                              "Maintenir le turbo tout en appuyant sur une \n"
                              "autre touche permet à la touche d'entrer dans \n"
-                             "un mode turbo où l'état du bouton est modulé \n"
+                             "un mode turbo où son état est modulé \n"
                              "avec un signal périodique. \n"
                              " \n"
                              "La modulation s'arrête lorsque la touche \n"

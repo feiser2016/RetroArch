@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2018 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (features_cpu.c).
@@ -37,6 +37,10 @@
 
 #if defined(_WIN32) && !defined(_XBOX)
 #include <windows.h>
+#endif
+
+#ifdef __PSL1GHT__
+#include <lv2/systime.h>
 #endif
 
 #if defined(__CELLOS_LV2__)
@@ -167,7 +171,7 @@ retro_perf_tick_t cpu_features_get_perf_counter(void)
    tv_sec     = (long)((ularge.QuadPart - epoch) / 10000000L);
    tv_usec    = (long)(system_time.wMilliseconds * 1000);
    time_ticks = (1000000 * tv_sec + tv_usec);
-#elif defined(__linux__) || defined(__QNX__) || defined(__MACH__)
+#elif defined(_POSIX_MONOTONIC_CLOCK) || defined(__QNX__) || defined(ANDROID) || defined(__MACH__)
    struct timespec tv = {0};
    if (ra_clock_gettime(CLOCK_MONOTONIC, &tv) == 0)
       time_ticks = (retro_perf_tick_t)tv.tv_sec * 1000000000 +
@@ -181,7 +185,7 @@ retro_perf_tick_t cpu_features_get_perf_counter(void)
    time_ticks = (retro_perf_tick_t)a | ((retro_perf_tick_t)d << 32);
 #elif defined(__ARM_ARCH_6__)
    __asm__ volatile( "mrc p15, 0, %0, c9, c13, 0" : "=r"(time_ticks) );
-#elif defined(__CELLOS_LV2__) || defined(_XBOX360) || defined(__powerpc__) || defined(__ppc__) || defined(__POWERPC__)
+#elif defined(__CELLOS_LV2__) || defined(_XBOX360) || defined(__powerpc__) || defined(__ppc__) || defined(__POWERPC__) || defined(__PSL1GHT__)
    time_ticks = __mftb();
 #elif defined(GEKKO)
    time_ticks = gettime();
@@ -225,7 +229,9 @@ retro_time_t cpu_features_get_time_usec(void)
 
    if (!QueryPerformanceCounter(&count))
       return 0;
-   return count.QuadPart * 1000000 / freq.QuadPart;
+   return (count.QuadPart / freq.QuadPart * 1000000) + (count.QuadPart % freq.QuadPart * 1000000 / freq.QuadPart);
+#elif defined(__PSL1GHT__)
+   return sysGetSystemTime();
 #elif defined(__CELLOS_LV2__)
    return sys_time_get_system_time();
 #elif defined(GEKKO)
@@ -348,12 +354,12 @@ static unsigned char check_arm_cpu_feature(const char* feature)
    if (!fp)
       return 0;
 
-   while (filestream_gets(fp, line, sizeof(line)) != NULL)
+   while (filestream_gets(fp, line, sizeof(line)))
    {
       if (strncmp(line, "Features\t: ", 11))
          continue;
 
-      if (strstr(line + 11, feature) != NULL)
+      if (strstr(line + 11, feature))
          status = 1;
 
       break;
@@ -424,8 +430,7 @@ static void cpulist_parse(CpuList* list, char **buf, ssize_t length)
          q = end;
 
       /* Get first value */
-      p = parse_decimal(p, q, &start_value);
-      if (p == NULL)
+      if (!(p = parse_decimal(p, q, &start_value)))
          return;
 
       end_value = start_value;
@@ -435,8 +440,7 @@ static void cpulist_parse(CpuList* list, char **buf, ssize_t length)
        */
       if (p < q && *p == '-')
       {
-         p = parse_decimal(p+1, q, &end_value);
-         if (p == NULL)
+         if (!(p = parse_decimal(p+1, q, &end_value)))
             return;
       }
 
@@ -494,7 +498,7 @@ unsigned cpu_features_get_core_amount(void)
    return sysinfo.dwNumberOfProcessors;
 #elif defined(GEKKO)
    return 1;
-#elif defined(PSP) || defined(PS2)
+#elif defined(PSP) || defined(PS2) || defined(__CELLOS_LV2__)
    return 1;
 #elif defined(VITA)
    return 4;

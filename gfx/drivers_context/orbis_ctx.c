@@ -28,8 +28,6 @@
 
 static enum gfx_ctx_api ctx_orbis_api = GFX_CTX_OPENGL_API;
 
-orbis_ctx_data_t *nx_ctx_ptr = NULL;
-
 extern bool platform_orbis_has_focus;
 
 void orbis_ctx_destroy(void *data)
@@ -55,7 +53,7 @@ static void orbis_ctx_get_video_size(void *data,
     *height = ATTR_ORBISGL_HEIGHT;
 }
 
-static void *orbis_ctx_init(video_frame_info_t *video_info, void *video_driver)
+static void *orbis_ctx_init(void *video_driver)
 {
 #ifdef HAVE_EGL
     int ret;
@@ -79,8 +77,6 @@ static void *orbis_ctx_init(video_frame_info_t *video_info, void *video_driver)
 
     if (!ctx_orbis)
         return NULL;
-
-    nx_ctx_ptr = ctx_orbis;
 
 #ifdef HAVE_EGL
 
@@ -124,7 +120,7 @@ error:
 }
 
 static void orbis_ctx_check_window(void *data, bool *quit,
-                                    bool *resize, unsigned *width, unsigned *height, bool is_shutdown)
+      bool *resize, unsigned *width, unsigned *height)
 {
     unsigned new_width, new_height;
 
@@ -141,9 +137,8 @@ static void orbis_ctx_check_window(void *data, bool *quit,
 }
 
 static bool orbis_ctx_set_video_mode(void *data,
-                                      video_frame_info_t *video_info,
-                                      unsigned width, unsigned height,
-                                      bool fullscreen)
+      unsigned width, unsigned height,
+      bool fullscreen)
 {
     /* Create an EGL rendering context */
     static const EGLint contextAttributeList[] =
@@ -163,10 +158,7 @@ static bool orbis_ctx_set_video_mode(void *data,
 
 #ifdef HAVE_EGL
     if (!egl_create_context(&ctx_orbis->egl, contextAttributeList))
-    {
-        egl_report_error();
         goto error;
-    }
 #endif
 
 #ifdef HAVE_EGL
@@ -177,7 +169,9 @@ static bool orbis_ctx_set_video_mode(void *data,
     return true;
 
 error:
-    printf("[ctx_orbis]: EGL error: %d.\n", eglGetError());
+#ifdef HAVE_EGL
+    egl_report_error();
+#endif
     orbis_ctx_destroy(data);
 
     return false;
@@ -197,14 +191,16 @@ static enum gfx_ctx_api orbis_ctx_get_api(void *data)
 }
 
 static bool orbis_ctx_bind_api(void *data,
-                                enum gfx_ctx_api api, unsigned major, unsigned minor)
+      enum gfx_ctx_api api, unsigned major, unsigned minor)
 {
     (void)data;
     ctx_orbis_api = api;
 
+#ifdef HAVE_EGL
     if (api == GFX_CTX_OPENGL_ES_API)
-        if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_FALSE)
+        if (egl_bind_api(EGL_OPENGL_ES_API))
             return true;
+#endif
 
     return false;
 }
@@ -232,7 +228,7 @@ static void orbis_ctx_set_swap_interval(void *data,
 #endif
 }
 
-static void orbis_ctx_swap_buffers(void *data, void *data2)
+static void orbis_ctx_swap_buffers(void *data)
 {
     orbis_ctx_data_t *ctx_orbis = (orbis_ctx_data_t *)data;
 

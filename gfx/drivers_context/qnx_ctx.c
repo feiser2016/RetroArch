@@ -74,7 +74,7 @@ static void gfx_ctx_qnx_destroy(void *data)
    free(data);
 }
 
-static void *gfx_ctx_qnx_init(video_frame_info_t *video_info, void *video_driver)
+static void *gfx_ctx_qnx_init(void *video_driver)
 {
    EGLint n;
    EGLint major, minor;
@@ -135,16 +135,10 @@ static void *gfx_ctx_qnx_init(video_frame_info_t *video_info, void *video_driver
 #ifdef HAVE_EGL
    if (!egl_init_context(&qnx->egl, EGL_NONE, EGL_DEFAULT_DISPLAY, &major, &minor,
             &n, attribs, NULL))
-   {
-      egl_report_error();
       goto error;
-   }
 
    if (!egl_create_context(&qnx->egl, context_attributes))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    if(!screen_win)
@@ -266,7 +260,7 @@ static void *gfx_ctx_qnx_init(video_frame_info_t *video_info, void *video_driver
    return qnx;
 
 error:
-   RARCH_ERR("EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_qnx_destroy(video_driver);
 screen_error:
    screen_stop_events(screen_ctx);
@@ -284,8 +278,7 @@ static void gfx_ctx_qnx_get_video_size(void *data,
 }
 
 static void gfx_ctx_qnx_check_window(void *data, bool *quit,
-      bool *resize, unsigned *width, unsigned *height,
-      bool is_shutdown)
+      bool *resize, unsigned *width, unsigned *height)
 {
    unsigned new_width, new_height;
    qnx_ctx_data_t *qnx = (qnx_ctx_data_t*)data;
@@ -302,14 +295,9 @@ static void gfx_ctx_qnx_check_window(void *data, bool *quit,
       *height = new_height;
       *resize = true;
    }
-
-   /* Check if we are exiting. */
-   if (is_shutdown)
-      *quit = true;
 }
 
 static bool gfx_ctx_qnx_set_video_mode(void *data,
-      video_frame_info_t *video_info,
       unsigned width, unsigned height,
       bool fullscreen)
 {
@@ -424,7 +412,7 @@ static void gfx_ctx_qnx_set_swap_interval(void *data, int swap_interval)
 #endif
 }
 
-static void gfx_ctx_qnx_swap_buffers(void *data, void *data2)
+static void gfx_ctx_qnx_swap_buffers(void *data)
 {
    qnx_ctx_data_t *qnx = (qnx_ctx_data_t*)data;
 

@@ -4,11 +4,16 @@
 # Only needed when check_enabled ($2), check_platform, check_lib, check_pkgconf,
 # check_header, check_macro and check_switch are not used.
 
-check_switch '' C99 -std=gnu99 "Cannot find C99 compatible compiler."
-check_switch '' NOUNUSED -Wno-unused-result
-add_define MAKEFILE NOUNUSED "$HAVE_NOUNUSED"
-check_switch '' NOUNUSED_VARIABLE -Wno-unused-variable
-add_define MAKEFILE NOUNUSED_VARIABLE "$HAVE_NOUNUSED_VARIABLE"
+check_switch '' C99 -std=gnu99 ''
+
+if [ "$HAVE_C99" = 'no' ]; then
+   HAVE_C99='auto'
+   check_switch '' C99 -std=c99 'Cannot find a C99 compatible compiler.'
+fi
+
+check_switch cxx CXX11 -std=c++11 ''
+check_switch '' NOUNUSED -Wno-unused-result ''
+check_switch '' NOUNUSED_VARIABLE -Wno-unused-variable ''
 
 # There are still broken 64-bit Linux distros out there. :)
 [ -z "$CROSS_COMPILE" ] && [ -d /usr/lib64 ] && add_dirs LIBRARY /usr/lib64
@@ -104,12 +109,28 @@ if [ "$HAVE_FLOATSOFTFP" = "yes" ]; then
    add_define MAKEFILE FLOATSOFTFP_CFLAGS -mfloat-abi=softfp
 fi
 
-check_platform Win32 EGL 'EGL is' false
 
-check_header EGL EGL/egl.h EGL/eglext.h
-# some systems have EGL libs, but no pkgconfig
-# https://github.com/linux-sunxi/sunxi-mali/pull/8
-check_val '' EGL "-l${VC_PREFIX}EGL $EXTRA_GL_LIBS" '' "${VC_PREFIX}egl" '' '' true
+if [ "$HAVE_ANGLE" = 'yes' ]; then
+   eval "HAVE_EGL=\"yes\""
+   add_dirs INCLUDE ./gfx/include/ANGLE
+   add_opt OPENGL no
+   add_opt OPENGLES yes
+   add_define MAKEFILE OPENGLES_LIBS "-lGLESv2"
+
+   case "$PLATFORM_NAME" in
+      MINGW32* )
+         add_dirs LIBRARY ./pkg/windows/x86
+      ;;
+      MINGW64* )
+         add_dirs LIBRARY ./pkg/windows/x86_64
+      ;;
+   esac
+else
+   check_header '' EGL EGL/egl.h EGL/eglext.h
+   # some systems have EGL libs, but no pkgconfig
+   # https://github.com/linux-sunxi/sunxi-mali/pull/8
+   check_val '' EGL "-l${VC_PREFIX}EGL $EXTRA_GL_LIBS" '' "${VC_PREFIX}egl" '' '' true
+fi
 
 if [ "$HAVE_EGL" = 'yes' ]; then
    EGL_LIBS="$EGL_LIBS $EXTRA_GL_LIBS"
@@ -144,7 +165,7 @@ check_enabled THREADS THREAD_STORAGE 'Thread Local Storage' 'Threads are' false
 check_lib '' THREAD_STORAGE "$PTHREADLIB" pthread_key_create
 
 if [ "$OS" = 'Linux' ]; then
-   check_header CDROM sys/ioctl.h scsi/sg.h
+   check_header '' CDROM sys/ioctl.h scsi/sg.h
 fi
 
 check_platform 'Linux Win32' CDROM 'CD-ROM is' user
@@ -209,8 +230,8 @@ check_val '' SIXEL -lsixel '' libsixel 1.6.0 '' false
 check_macro AUDIOIO AUDIO_SETINFO sys/audioio.h
 
 if [ "$HAVE_OSS" != 'no' ]; then
-   check_header OSS sys/soundcard.h
-   check_header OSS_BSD soundcard.h
+   check_header '' OSS sys/soundcard.h
+   check_header '' OSS_BSD soundcard.h
    check_lib '' OSS_LIB -lossaudio
 fi
 
@@ -244,6 +265,8 @@ if [ "$HAVE_SDL2" = 'yes' ] && [ "$HAVE_SDL" = 'yes' ]; then
    die : 'Notice: SDL drivers will be replaced by SDL2 ones.'
    HAVE_SDL=no
 fi
+
+check_enabled CXX11 CXX C++ 'C++11 support is' false
 
 check_platform Haiku DISCORD 'Discord is' false
 check_enabled CXX DISCORD discord 'The C++ compiler is' false
@@ -280,7 +303,7 @@ check_val '' FLAC '-lFLAC' '' flac '' '' false
 check_enabled SSL BUILTINMBEDTLS 'builtin mbedtls' 'ssl is' true
 
 if [ "$HAVE_SSL" != 'no' ]; then
-   check_header MBEDTLS \
+   check_header '' MBEDTLS \
       mbedtls/config.h \
       mbedtls/certs.h \
       mbedtls/debug.h \
@@ -330,15 +353,23 @@ check_platform Win32 WASAPI 'WASAPI is' true
 check_platform Win32 XAUDIO 'XAudio is' true
 check_platform Win32 WINMM 'WinMM is' true
 
+if [ "$HAVE_BLISSBOX" != 'no' ]; then
+   if [ "$HAVE_LIBUSB" != 'no' ] || [ "$OS" = 'Win32' ]; then
+      add_opt BLISSBOX yes
+   else
+      add_opt BLISSBOX no
+   fi
+fi
+
 if [ "$HAVE_OPENGL" != 'no' ] && [ "$HAVE_OPENGLES" != 'yes' ]; then
    if [ "$OS" = 'Darwin' ]; then
-      check_header OPENGL "OpenGL/gl.h"
+      check_header '' OPENGL "OpenGL/gl.h"
       check_lib '' OPENGL "-framework OpenGL"
    elif [ "$OS" = 'Win32' ]; then
-      check_header OPENGL "GL/gl.h"
+      check_header '' OPENGL "GL/gl.h"
       check_lib '' OPENGL -lopengl32
    else
-      check_header OPENGL "GL/gl.h"
+      check_header '' OPENGL "GL/gl.h"
       check_lib '' OPENGL -lGL
    fi
 
@@ -381,21 +412,20 @@ check_enabled ZLIB BUILTINZLIB 'builtin zlib' 'zlib is' true
 check_val '' ZLIB '-lz' '' zlib '' '' false
 check_val '' MPV -lmpv '' mpv '' '' false
 
-check_header DRMINGW exchndl.h
+check_header '' DRMINGW exchndl.h
 check_lib '' DRMINGW -lexchndl
 
 check_enabled THREADS FFMPEG FFmpeg 'Threads are' false
 
 if [ "$HAVE_FFMPEG" != 'no' ]; then
-   check_val '' AVCODEC -lavcodec '' libavcodec 54 '' false
-   check_val '' AVFORMAT -lavformat '' libavformat 54 '' false
-   check_val '' AVDEVICE -lavdevice '' libavdevice '' '' false
-   check_val '' SWRESAMPLE -lswresample '' libswresample '' '' false
-   check_val '' AVRESAMPLE -lavresample '' libavresample '' '' false
-   check_val '' AVUTIL -lavutil '' libavutil 51 '' false
-   check_val '' SWSCALE -lswscale '' libswscale 2.1 '' false
+   check_val '' AVCODEC -lavcodec '' libavcodec 57 '' false
+   check_val '' AVFORMAT -lavformat '' libavformat 57 '' false
+   check_val '' AVDEVICE -lavdevice '' libavdevice 57 '' false
+   check_val '' SWRESAMPLE -lswresample '' libswresample 2 '' false
+   check_val '' AVUTIL -lavutil '' libavutil 55 '' false
+   check_val '' SWSCALE -lswscale '' libswscale 4 '' false
 
-   check_header AV_CHANNEL_LAYOUT libavutil/channel_layout.h
+   check_header '' AV_CHANNEL_LAYOUT libavutil/channel_layout.h
 
    HAVE_FFMPEG='yes'
    if [ "$HAVE_AVCODEC" = 'no' ] || [ "$HAVE_SWRESAMPLE" = 'no' ] || [ "$HAVE_AVFORMAT" = 'no' ] || [ "$HAVE_AVUTIL" = 'no' ] || [ "$HAVE_SWSCALE" = 'no' ]; then
@@ -456,7 +486,7 @@ check_enabled XF86VM XVIDEO XVideo 'XF86vm is' false
 check_val '' XVIDEO -lXv '' xv '' '' false
 check_val '' XINERAMA -lXinerama '' xinerama '' '' false
 check_lib '' XRANDR -lXrandr
-check_header XSHM X11/Xlib.h X11/extensions/XShm.h
+check_header '' XSHM X11/Xlib.h X11/extensions/XShm.h
 check_val '' XKBCOMMON -lxkbcommon '' xkbcommon 0.3.2 '' false
 check_val '' WAYLAND '-lwayland-egl -lwayland-client' '' wayland-egl 10.1.0 '' false
 check_val '' WAYLAND_CURSOR -lwayland-cursor '' wayland-cursor 1.12 '' false
@@ -476,8 +506,8 @@ else
     HAVE_WAYLAND='no'
 fi
 
-check_header PARPORT linux/parport.h
-check_header PARPORT linux/ppdev.h
+check_header '' PARPORT linux/parport.h
+check_header '' PARPORT linux/ppdev.h
 
 if [ "$OS" != 'Win32' ] && [ "$OS" != 'Linux' ]; then
    check_lib '' STRL "$CLIB" strlcpy
@@ -518,15 +548,53 @@ if [ "$HAVE_MENU" != 'no' ]; then
          add_opt OZONE no
          add_opt XMB no
          add_opt STRIPES no
-         add_opt MENU_WIDGETS no
       fi
       die : 'Notice: Hardware rendering context not available.'
    fi
 fi
 
+if [ "$HAVE_STEAM" = 'yes' ]; then
+   add_opt ONLINE_UPDATER no
+   add_opt UPDATE_CORES no
+   die : 'Notice: Steam build enabled, disabling online updater as well.'
+fi
+
 check_enabled CXX SLANG slang 'The C++ compiler is' false
 check_enabled CXX GLSLANG glslang 'The C++ compiler is' false
 check_enabled CXX SPIRV_CROSS SPIRV-Cross 'The C++ compiler is' false
+
+check_enabled GLSLANG BUILTINGLSLANG 'builtin glslang' 'glslang is' true
+
+if [ "$HAVE_GLSLANG" != no ]; then
+   check_header cxx GLSLANG \
+      glslang/Public/ShaderLang.h \
+      glslang/SPIRV/GlslangToSpv.h
+
+   check_lib cxx GLSLANG -lglslang
+   check_lib cxx GLSLANG_OSDEPENDENT -lOSDependent
+   check_lib cxx GLSLANG_OGLCOMPILER -lOGLCompiler
+   check_lib cxx GLSLANG_HLSL -lHLSL
+   check_lib cxx GLSLANG_SPIRV -lSPIRV
+   check_lib cxx GLSLANG_SPIRV_TOOLS_OPT -lSPIRV-Tools-opt
+   check_lib cxx GLSLANG_SPIRV_TOOLS -lSPIRV-Tools
+
+   if [ "$HAVE_GLSLANG" = no ] ||
+      [ "$HAVE_GLSLANG_OSDEPENDENT" = no ] ||
+      [ "$HAVE_GLSLANG_OGLCOMPILER" = no ] ||
+      [ "$HAVE_GLSLANG_HLSL" = no ] ||
+      [ "$HAVE_GLSLANG_SPIRV" = no ] ||
+      [ "$HAVE_GLSLANG_SPIRV_TOOLS_OPT" = no ] ||
+      [ "$HAVE_GLSLANG_SPIRV_TOOLS" = no ]; then
+      if [ "$HAVE_BUILTINGLSLANG" != yes ]; then
+         die : 'Notice: System glslang libraries not found, disabling glslang support.'
+         HAVE_GLSLANG=no
+      else
+         HAVE_GLSLANG=yes
+      fi
+   else
+      HAVE_GLSLANG=yes
+   fi
+fi
 
 check_enabled SLANG GLSLANG glslang 'slang is' false
 check_enabled SLANG SPIRV_CROSS SPIRV-Cross 'slang is' false
@@ -567,6 +635,5 @@ if [ "$HAVE_DEBUG" = 'yes' ]; then
    fi
 fi
 
-check_enabled MENU MENU_WIDGETS 'menu widgets' 'The menu is' false
 check_enabled 'ZLIB BUILTINZLIB' RPNG RPNG 'zlib is' false
 check_enabled V4L2 VIDEOPROCESSOR 'video processor' 'Video4linux2 is' true

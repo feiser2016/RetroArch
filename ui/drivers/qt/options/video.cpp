@@ -140,8 +140,8 @@ QWidget *VideoPage::widget()
    miscGroup->add(MENU_ENUM_LABEL_VIDEO_THREADED);
    miscGroup->add(MENU_ENUM_LABEL_VIDEO_BLACK_FRAME_INSERTION);
    miscGroup->add(MENU_ENUM_LABEL_VIDEO_GPU_SCREENSHOT);
-   miscGroup->add(MENU_ENUM_LABEL_VIDEO_CROP_OVERSCAN);
    miscGroup->add(MENU_ENUM_LABEL_VIDEO_SMOOTH);
+   miscGroup->add(MENU_ENUM_LABEL_VIDEO_CTX_SCALING);
    miscGroup->add(MENU_ENUM_LABEL_VIDEO_SHADER_DELAY);
 
    syncMiscLayout->addWidget(syncGroup);
@@ -151,6 +151,8 @@ QWidget *VideoPage::widget()
 
    modeLayout->addWidget(fullscreenGroup);
    modeLayout->addWidget(windowedGroup);
+
+   aspectGroup->add(MENU_ENUM_LABEL_VIDEO_CROP_OVERSCAN);
 
    outputScalingLayout->addWidget(outputGroup);
    outputScalingLayout->addWidget(aspectGroup);
@@ -228,7 +230,8 @@ AspectRatioGroup::AspectRatioGroup(const QString &title, QWidget *parent) :
 
 void AspectRatioGroup::paintEvent(QPaintEvent *event)
 {
-   unsigned value = config_get_ptr()->uints.video_aspect_ratio_idx;
+   settings_t *settings = config_get_ptr();
+   unsigned       value = settings->uints.video_aspect_ratio_idx;
 
    if (ASPECT_RATIO_4_3 >= value || value <= ASPECT_RATIO_32_9)
    {
@@ -294,8 +297,11 @@ void VideoPage::onResolutionComboIndexChanged(const QString &text)
 
 void CrtSwitchresPage::onCrtSuperResolutionComboIndexChanged(int index)
 {
+   settings_t *settings = config_get_ptr();
    Q_UNUSED(index)
-   config_get_ptr()->uints.crt_switch_resolution_super = m_crtSuperResolutionCombo->currentData().value<unsigned>();
+
+   settings->uints.crt_switch_resolution_super = 
+   m_crtSuperResolutionCombo->currentData().value<unsigned>();
 }
 
 AspectRatioRadioButton::AspectRatioRadioButton(unsigned min, unsigned max, QWidget *parent) :

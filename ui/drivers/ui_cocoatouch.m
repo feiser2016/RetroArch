@@ -37,6 +37,8 @@
 #include "../../menu/menu_setting.h"
 #endif
 
+#import <AVFoundation/AVFoundation.h>
+
 static char msg_old[PATH_MAX_LENGTH];
 #ifdef HAVE_COCOA_METAL
 id<ApplePlatform> apple_platform;
@@ -44,6 +46,8 @@ id<ApplePlatform> apple_platform;
 static id apple_platform;
 #endif
 static CFRunLoopObserverRef iterate_observer;
+
+static size_t old_size = 0;
 
 /* forward declaration */
 static void apple_rarch_exited(void);
@@ -71,10 +75,7 @@ static void rarch_disable_ui(void)
 }
 
 static void ui_companion_cocoatouch_event_command(
-      void *data, enum event_command cmd)
-{
-    (void)data;
-}
+      void *data, enum event_command cmd) { }
 
 static void rarch_draw_observer(CFRunLoopObserverRef observer,
     CFRunLoopActivity activity, void *info)
@@ -356,6 +357,12 @@ enum
    [self pushViewController:self.mainmenu animated:NO];
 #endif
 
+   NSError *error;
+   [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:&error];
+   if (error) {
+       NSLog(@"Could not set audio session category: %@",error.localizedDescription);
+   }
+
    [self refreshSystemConfig];
    [self showGameView];
 
@@ -386,20 +393,13 @@ enum
 
 - (void)applicationDidBecomeActive:(UIApplication *)application
 {
-   settings_t *settings = config_get_ptr();
+   settings_t *settings            = config_get_ptr();
+   bool ui_companion_start_on_boot = settings->bools.ui_companion_start_on_boot;
 
-   if (settings->bools.ui_companion_start_on_boot)
+   if (ui_companion_start_on_boot)
       return;
 
   [self showGameView];
-}
-
-- (void)applicationWillResignActive:(UIApplication *)application
-{
-   dispatch_async(dispatch_get_main_queue(),
-                  ^{
-                  ui_companion_cocoatouch_event_command(NULL, CMD_EVENT_MENU_SAVE_CURRENT_CONFIG);
-                  });
 }
 
 -(BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation
@@ -435,7 +435,9 @@ enum
     [[UIApplication sharedApplication] setIdleTimerDisabled:true];
    [self.window setRootViewController:[CocoaView get]];
 
-   ui_companion_cocoatouch_event_command(NULL, CMD_EVENT_AUDIO_START);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        command_event(CMD_EVENT_AUDIO_START, NULL);
+    });
    rarch_disable_ui();
 }
 
@@ -530,18 +532,6 @@ int main(int argc, char *argv[])
    }
 }
 
-#if 0
-static void apple_display_alert(const char *message, const char *title)
-{
-   UIAlertView* alert = [[UIAlertView alloc] initWithTitle:BOXSTRING(title)
-                                             message:BOXSTRING(message)
-                                             delegate:nil
-                                             cancelButtonTitle:BOXSTRING("OK")
-                                             otherButtonTitles:nil];
-   [alert show];
-}
-#endif
-
 static void apple_rarch_exited(void)
 {
     RetroArch_iOS *ap = (RetroArch_iOS *)apple_platform;
@@ -598,8 +588,6 @@ static void *ui_companion_cocoatouch_init(void)
 
    return handle;
 }
-
-static size_t old_size = 0;
 
 static void ui_companion_cocoatouch_notify_list_pushed(void *data,
    file_list_t *list, file_list_t *menu_list)

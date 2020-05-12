@@ -53,11 +53,11 @@ ifeq ($(SALAMANDER_BUILD),1)
    OBJ += frontend/frontend_salamander.o
    OBJ += frontend/frontend_driver.o
    OBJ += frontend/drivers/platform_wiiu.o
-   OBJ += frontend/drivers/platform_null.o
    OBJ += libretro-common/encodings/encoding_utf.o
    OBJ += libretro-common/compat/compat_strcasestr.o
    OBJ += libretro-common/compat/fopen_utf8.o
    OBJ += libretro-common/file/file_path.o
+   OBJ += libretro-common/file/file_path_io.o
    OBJ += libretro-common/string/stdstring.o
    OBJ += libretro-common/lists/string_list.o
    OBJ += libretro-common/lists/dir_list.o
@@ -74,7 +74,9 @@ ifeq ($(SALAMANDER_BUILD),1)
 else
    DEFINES += -DRARCH_INTERNAL
    DEFINES += -DHAVE_KEYMAPPER
+   DEFINES += -DHAVE_ONLINE_UPDATER
    DEFINES += -DHAVE_UPDATE_ASSETS
+   DEFINES += -DHAVE_UPDATE_CORES
    DEFINES += -DHAVE_FILTERS_BUILTIN
    DEFINES += -DHAVE_SLANG
    DEFINES += -DHAVE_SHADERPIPELINE
@@ -95,7 +97,7 @@ endif
    OBJ += gfx/drivers/gx2_shaders/snowflake.o
 
    ifeq ($(GRIFFIN_BUILD), 1)
-      OBJ += griffin/griffin.o
+      OBJ += griffin/griffin.o griffin/griffin_cpp.o
 
       INCDIRS += -Ilibretro-common/include/compat/zlib
       # for stb, libfat, iosuhax
@@ -105,7 +107,7 @@ endif
       INCDIRS += -Ideps/SPIRV-Cross
 
       DEFINES += -DHAVE_AUDIOMIXER
-      DEFINES += -DHAVE_GRIFFIN=1 -DHAVE_MENU -DHAVE_RGUI -DHAVE_LIBRETRODB
+      DEFINES += -DHAVE_GRIFFIN=1 -DHAVE_MENU -DHAVE_GFX_WIDGETS -DHAVE_CONFIGFILE -DHAVE_RGUI -DHAVE_LIBRETRODB
       DEFINES += -DHAVE_ZLIB -DHAVE_RPNG -DHAVE_RJPEG -DHAVE_RBMP -DHAVE_RTGA -DHAVE_CC_RESAMPLER
       DEFINES += -DHAVE_SPIRV_CROSS -DHAVE_SLANG
       DEFINES += -DHAVE_STB_FONT -DHAVE_STB_VORBIS -DHAVE_LANGEXTRA -DHAVE_LIBRETRODB -DHAVE_NETWORKING -DHAVE_NETPLAYDISCOVERY
@@ -120,10 +122,12 @@ endif
    else
       HAVE_AUDIOMIXER = 1
       HAVE_MENU_COMMON = 1
+      HAVE_GFX_WIDGETS = 1
       HAVE_RTGA = 1
       HAVE_RPNG = 1
       HAVE_RJPEG = 1
       HAVE_RBMP = 1
+      HAVE_CONFIGFILE = 1
       HAVE_MENU = 1
       HAVE_RGUI = 1
       HAVE_7ZIP = 1
@@ -160,7 +164,7 @@ OBJ := $(addprefix $(BUILD_DIR)/,$(OBJ))
 #-----------------------------
 # Compile flags
 
-DEFINES += -DWIIU -DMSB_FIRST -D__WUT__ -DHW_WUP -D__wiiu__
+DEFINES += -DWIIU -D__WUT__ -DHW_WUP -D__wiiu__
 DEFINES += -DHAVE_MAIN
 DEFINES += -DRARCH_CONSOLE
 
@@ -181,7 +185,7 @@ CFLAGS  := -mcpu=750 -meabi -mhard-float
 CFLAGS  += -ffast-math -Werror=implicit-function-declaration
 CFLAGS  += -ffunction-sections -fdata-sections
 #CFLAGS += -fomit-frame-pointer -mword-relocations
-#CFLAGS += -Wall
+CFLAGS += -Wall
 
 ifeq ($(DEBUG), 1)
    CFLAGS += -O0 -g

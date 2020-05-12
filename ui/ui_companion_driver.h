@@ -159,7 +159,6 @@ extern ui_application_t      ui_application_cocoa;
 extern ui_application_t      ui_application_qt;
 extern ui_application_t      ui_application_win32;
 
-extern ui_companion_driver_t ui_companion_null;
 extern ui_companion_driver_t ui_companion_cocoa;
 extern ui_companion_driver_t ui_companion_cocoatouch;
 extern ui_companion_driver_t ui_companion_qt;
@@ -178,8 +177,6 @@ void ui_companion_driver_notify_refresh(void);
 void ui_companion_driver_notify_list_loaded(file_list_t *list, file_list_t *menu_list);
 
 void ui_companion_driver_notify_content_loaded(void);
-
-void ui_companion_driver_toggle(bool force);
 
 void ui_companion_driver_free(void);
 

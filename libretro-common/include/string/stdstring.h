@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2019 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (stdstring.h).
@@ -133,9 +133,22 @@ char* string_tokenize(char **str, const char *delim);
 /* Removes every instance of character 'c' from 'str' */
 void string_remove_all_chars(char *str, char c);
 
+/* Replaces every instance of character 'find' in 'str'
+ * with character 'replace' */
+void string_replace_all_chars(char *str, char find, char replace);
+
 /* Converts string to unsigned integer.
  * Returns 0 if string is invalid  */
 unsigned string_to_unsigned(const char *str);
+
+/* Converts hexadecimal string to unsigned integer.
+ * Handles optional leading '0x'.
+ * Returns 0 if string is invalid  */
+unsigned string_hex_to_unsigned(const char *str);
+
+char *string_init(const char *src);
+
+void string_set(char **string, const char *src);
 
 RETRO_END_DECLS
 

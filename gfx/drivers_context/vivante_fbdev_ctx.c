@@ -61,7 +61,7 @@ static void gfx_ctx_vivante_destroy(void *data)
 
 }
 
-static void *gfx_ctx_vivante_init(video_frame_info_t *video_info, void *video_driver)
+static void *gfx_ctx_vivante_init(void *video_driver)
 {
 #ifdef HAVE_EGL
    EGLint n;
@@ -93,18 +93,16 @@ static void *gfx_ctx_vivante_init(video_frame_info_t *video_info, void *video_dr
    system("setterm -cursor off");
 
 #ifdef HAVE_EGL
-   if (!egl_init_context(&viv->egl, EGL_NONE, EGL_DEFAULT_DISPLAY, &major, &minor,
+   if (!egl_init_context(&viv->egl, EGL_NONE,
+            EGL_DEFAULT_DISPLAY, &major, &minor,
             &n, attribs, NULL))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    return viv;
 
 error:
-   RARCH_ERR("[Vivante fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_vivante_destroy(viv);
    return NULL;
 }
@@ -120,8 +118,7 @@ static void gfx_ctx_vivante_get_video_size(void *data,
 }
 
 static void gfx_ctx_vivante_check_window(void *data, bool *quit,
-      bool *resize, unsigned *width, unsigned *height,
-      bool is_shutdown)
+      bool *resize, unsigned *width, unsigned *height)
 {
    unsigned new_width, new_height;
    vivante_ctx_data_t *viv = (vivante_ctx_data_t*)data;
@@ -141,7 +138,6 @@ static void gfx_ctx_vivante_check_window(void *data, bool *quit,
 }
 
 static bool gfx_ctx_vivante_set_video_mode(void *data,
-      video_frame_info_t *video_info,
       unsigned width, unsigned height,
       bool fullscreen)
 {
@@ -164,10 +160,7 @@ static bool gfx_ctx_vivante_set_video_mode(void *data,
 
 #ifdef HAVE_EGL
    if (!egl_create_context(&viv->egl, attribs))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    viv->native_window = fbCreateWindow(fbGetDisplayByIndex(0), 0, 0, 0, 0);
@@ -180,7 +173,7 @@ static bool gfx_ctx_vivante_set_video_mode(void *data,
    return true;
 
 error:
-   RARCH_ERR("[Vivante fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_vivante_destroy(data);
    return false;
 }
@@ -231,7 +224,7 @@ static void gfx_ctx_vivante_set_swap_interval(void *data, int swap_interval)
 #endif
 }
 
-static void gfx_ctx_vivante_swap_buffers(void *data, void *data2)
+static void gfx_ctx_vivante_swap_buffers(void *data)
 {
    vivante_ctx_data_t *viv = (vivante_ctx_data_t*)data;
 
